@@ -23,6 +23,12 @@ A local Odoo instance management tool similar to [odoo.sh](https://www.odoo.sh) 
 
 ## Installation
 
+### Quick Install (One-line)
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)
+```
+
 ### From source
 
 ```bash
