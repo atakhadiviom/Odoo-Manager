@@ -55,9 +55,9 @@ odoo-manager = "odoo_manager.cli:main"
 om = "odoo_manager.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/odoo-manager"
-Repository = "https://github.com/yourusername/odoo-manager"
-Issues = "https://github.com/yourusername/odoo-manager/issues"
+Homepage = "https://github.com/atakhadiviom/Odoo-Manager"
+Repository = "https://github.com/atakhadiviom/Odoo-Manager"
+Issues = "https://github.com/atakhadiviom/Odoo-Manager/issues"
 
 [build-system]
 requires = ["hatchling"]

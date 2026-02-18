@@ -26,7 +26,7 @@ A local Odoo instance management tool similar to [odoo.sh](https://www.odoo.sh) 
 ### From source
 
 ```bash
-git clone https://github.com/yourusername/odoo-manager.git
+git clone https://github.com/atakhadiviom/Odoo-Manager.git
 cd odoo-manager
 pip install -e .
 ```
