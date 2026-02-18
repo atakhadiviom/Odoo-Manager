@@ -28,6 +28,10 @@ def warning(message: str) -> None:
     console.print(f"[yellow]⚠[/yellow] {message}")
 
 
+# Alias for compatibility
+warn = warning
+
+
 def info(message: str) -> None:
     """Print an info message."""
     console.print(f"[blue]ℹ[/blue] {message}")
