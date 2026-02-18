@@ -2,9 +2,10 @@
 # One-line installer for Odoo Manager
 # Usage: bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)
 
-set -e
-
-echo "Installing Odoo Manager..."
+echo "=========================================="
+echo "Odoo Manager Installation"
+echo "=========================================="
+echo ""
 
 # Detect Python command
 PYTHON_CMD=""
@@ -19,124 +20,127 @@ else
 fi
 
 # Check Python version
-PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+echo "Found Python: $PYTHON_CMD $PYTHON_VERSION"
+
 if [ "$(echo "$PYTHON_VERSION" | cut -d. -f2)" -lt 11 ]; then
-    echo "Error: Python 3.11+ is required but found $PYTHON_CMD $PYTHON_VERSION"
+    echo "Error: Python 3.11+ is required but found $PYTHON_VERSION"
     exit 1
 fi
 
-echo "Using $PYTHON_CMD $PYTHON_VERSION"
-
-# Detect user bin directory
-USER_BIN="$HOME/.local/bin"
-mkdir -p "$USER_BIN" 2>/dev/null || true
-
-# Run installation
+# Create install directory
 echo ""
-echo "Installing odoo-manager..."
+echo "Setting up directories..."
+INSTALL_DIR="$HOME/odoo-manager"
+mkdir -p "$INSTALL_DIR"
 
-# Method 1: Clone and install in editable mode (most reliable)
-TEMP_DIR=$(mktemp -d)
-REPO_DIR="$TEMP_DIR/odoo-manager"
-
+# Download the code
 echo "Downloading from GitHub..."
-git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$REPO_DIR" || {
+if ! git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null; then
     echo "Error: Failed to clone repository"
-    rm -rf "$TEMP_DIR"
-    exit 1
-}
-
-cd "$REPO_DIR"
-echo "Installing package..."
-
-# Try installing with pip
-if $PYTHON_CMD -m pip install -e . 2>&1; then
-    echo ""
-    echo -e "\033[0;32m✓ Package installed via pip\033[0m"
-else
-    echo "pip install failed, creating standalone wrapper..."
+    echo "Trying with full depth..."
+    if ! git clone https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null; then
+        echo "Error: Failed to clone repository"
+        exit 1
+    fi
 fi
+echo "✓ Downloaded to $INSTALL_DIR"
 
-# Create standalone wrapper script (works regardless of pip install)
-echo "Creating command wrapper..."
+# Install dependencies
+echo ""
+echo "Installing Python dependencies..."
+cd "$INSTALL_DIR"
 
-# Create wrapper that runs directly from source
-cat > "$USER_BIN/odoo-manager" << 'WRAPPER_EOF'
+# Install dependencies one by one for better error visibility
+DEPS="click rich pydantic pydantic-settings pyyaml jinja2 psycopg2-binary requests humanfriendly textual GitPython APScheduler psutil paramiko httpx cryptography"
+
+for dep in $DEPS; do
+    echo -n "  Installing $dep ... "
+    if $PYTHON_CMD -m pip install --user "$dep" -q 2>/dev/null; then
+        echo "✓"
+    else
+        echo "✗ (may be optional)"
+    fi
+done
+
+# Create executable command
+echo ""
+echo "Creating odoo-manager command..."
+
+USER_BIN="$HOME/.local/bin"
+mkdir -p "$USER_BIN"
+
+# Create the main executable
+cat > "$USER_BIN/odoo-manager" << 'EOF'
 #!/bin/bash
-# Auto-generated wrapper for odoo-manager
+# Odoo Manager - executable wrapper
 
-# Find Python 3.11+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$HOME/odoo-manager"
+
+# Find Python
 PYTHON_CMD=""
 if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    if [ "$(echo "$PYTHON_VERSION" | cut -d. -f2)" -ge 11 ]; then
-        PYTHON_CMD="python3"
-    fi
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
 fi
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo "Error: Python 3.11+ required"
+    echo "Error: Python not found"
     exit 1
 fi
 
-# Try to run from installed package first
-if $PYTHON_CMD -m odoo_manager.cli "$@" 2>/dev/null; then
-    exit 0
-fi
-
-# Fallback: run from source
-ODOO_MANAGER_DIR="$HOME/.odoo-manager"
-if [ -d "$ODOO_MANAGER_DIR" ]; then
-    cd "$ODOO_MANAGER_DIR"
-    PYTHONPATH="$ODOO_MANAGER_DIR:$PYTHONPATH" $PYTHON_CMD -m odoo_manager.cli "$@"
-else
-    echo "Error: odoo-manager not found. Please reinstall."
+# Run from install directory
+cd "$INSTALL_DIR" 2>/dev/null || {
+    echo "Error: odoo-manager not installed properly"
+    echo "Run: bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)"
     exit 1
-fi
-WRAPPER_EOF
+}
+
+PYTHONPATH="$INSTALL_DIR:$PYTHONPATH" $PYTHON_CMD -m odoo_manager.cli "$@"
+EOF
 
 chmod +x "$USER_BIN/odoo-manager"
 
-# Create short command symlink
-ln -sf "$USER_BIN/odoo-manager" "$USER_BIN/om" 2>/dev/null || true
+# Create short command
+cat > "$USER_BIN/om" << 'EOF'
+#!/bin/bash
+exec "$HOME/.local/bin/odoo-manager" "$@"
+EOF
+chmod +x "$USER_BIN/om"
 
-# Copy source to ~/.odoo-manager for fallback
-echo "Installing source files..."
-FINAL_DIR="$HOME/.odoo-manager"
-rm -rf "$FINAL_DIR" 2>/dev/null || true
-cp -r "$REPO_DIR" "$FINAL_DIR"
-
-# Install dependencies to user site
-echo "Installing dependencies..."
-cd "$FINAL_DIR"
-$PYTHON_CMD -m pip install --user -r pyproject.toml 2>&1 || \
-$PYTHON_CMD -m pip install --user click rich pydantic pydantic-settings pyyaml jinja2 psycopg2-binary docker requests humanfriendly textual GitPython APScheduler psutil paramiko httpx cryptography 2>&1 || \
-echo "Warning: Some dependencies may not have installed correctly"
-
-rm -rf "$TEMP_DIR"
-
-echo ""
-echo -e "\033[0;32m✓ Odoo Manager installed successfully!\033[0m"
-echo ""
+echo "✓ Created command: $USER_BIN/odoo-manager"
+echo "✓ Created command: $USER_BIN/om"
 
 # Check PATH
+echo ""
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
-    echo "⚠️  IMPORTANT: Add $USER_BIN to your PATH:"
+    echo "=========================================="
+    echo "⚠️  IMPORTANT: Add to PATH"
+    echo "=========================================="
     echo ""
+    echo "Run this command:"
     echo "  echo 'export PATH=\"\$PATH:$USER_BIN\"' >> ~/.bashrc"
     echo "  source ~/.bashrc"
     echo ""
-    echo "Or run this for the current session:"
+    echo "Or for current session:"
     echo "  export PATH=\"\$PATH:$USER_BIN\""
     echo ""
+    echo "=========================================="
+else
+    echo "✓ $USER_BIN is in PATH"
 fi
 
-echo "Available commands:"
-echo "  odoo-manager  - Main CLI tool"
-echo "  om            - Short command"
+echo ""
+echo "=========================================="
+echo "Installation Complete!"
+echo "=========================================="
+echo ""
+echo "Try running:"
+echo "  odoo-manager --help"
 echo ""
 echo "Quick start:"
 echo "  odoo-manager config init"
 echo "  odoo-manager instance create myinstance"
 echo ""
-echo "For more information: https://github.com/atakhadiviom/Odoo-Manager"
