@@ -28,6 +28,14 @@ if [ "$(echo "$PYTHON_VERSION" | cut -d. -f2)" -lt 11 ]; then
     exit 1
 fi
 
+# Check if pip is available
+echo ""
+echo "Checking pip..."
+if ! $PYTHON_CMD -m pip --version &>/dev/null; then
+    echo "pip is not installed. Installing pip..."
+    curl -sS https://bootstrap.pypa.io/get-pip.py | $PYTHON_CMD
+fi
+
 # Create install directory
 echo ""
 echo "Setting up directories..."
@@ -36,14 +44,13 @@ mkdir -p "$INSTALL_DIR"
 
 # Download the code
 echo "Downloading from GitHub..."
-if ! git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null; then
-    echo "Error: Failed to clone repository"
-    echo "Trying with full depth..."
-    if ! git clone https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null; then
+git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null || {
+    echo "Trying full clone..."
+    git clone https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" || {
         echo "Error: Failed to clone repository"
         exit 1
-    fi
-fi
+    }
+}
 echo "✓ Downloaded to $INSTALL_DIR"
 
 # Install dependencies
@@ -51,17 +58,49 @@ echo ""
 echo "Installing Python dependencies..."
 cd "$INSTALL_DIR"
 
-# Install dependencies one by one for better error visibility
-DEPS="click rich pydantic pydantic-settings pyyaml jinja2 psycopg2-binary requests humanfriendly textual GitPython APScheduler psutil paramiko httpx cryptography"
+# Upgrade pip first
+echo "Upgrading pip..."
+$PYTHON_CMD -m pip install --upgrade pip --user
 
-for dep in $DEPS; do
-    echo -n "  Installing $dep ... "
-    if $PYTHON_CMD -m pip install --user "$dep" -q 2>/dev/null; then
-        echo "✓"
-    else
-        echo "✗ (may be optional)"
-    fi
-done
+# Install requirements from pyproject.toml or use explicit list
+echo "Installing required packages..."
+
+# Try using requirements.txt approach from pyproject.toml dependencies
+cat > "$INSTALL_DIR/requirements.txt" << 'REQEOF'
+click>=8.1.0
+rich>=13.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+pyyaml>=6.0
+jinja2>=3.1.0
+psycopg2-binary>=2.9.0
+requests>=2.28.0
+humanfriendly>=10.0.0
+textual>=0.44.0
+GitPython>=3.1.0
+APScheduler>=3.10.0
+psutil>=5.9.0
+paramiko>=3.0.0
+httpx>=0.24.0
+cryptography>=41.0.0
+REQEOF
+
+echo "Running: pip install --user -r requirements.txt"
+$PYTHON_CMD -m pip install --user -r "$INSTALL_DIR/requirements.txt"
+
+if [ $? -eq 0 ]; then
+    echo "✓ Dependencies installed"
+else
+    echo ""
+    echo "⚠️  Some dependencies failed. Trying alternative install..."
+    echo ""
+    # Try with --break-system-packages flag (for newer pip versions)
+    $PYTHON_CMD -m pip install -r "$INSTALL_DIR/requirements.txt" --break-system-packages 2>/dev/null && {
+        echo "✓ Dependencies installed with --break-system-packages"
+    } || {
+        echo "⚠️  Warning: Dependency installation had issues"
+    }
+fi
 
 # Create executable command
 echo ""
@@ -75,7 +114,6 @@ cat > "$USER_BIN/odoo-manager" << 'EOF'
 #!/bin/bash
 # Odoo Manager - executable wrapper
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$HOME/odoo-manager"
 
 # Find Python
@@ -98,7 +136,9 @@ cd "$INSTALL_DIR" 2>/dev/null || {
     exit 1
 }
 
-PYTHONPATH="$INSTALL_DIR:$PYTHONPATH" $PYTHON_CMD -m odoo_manager.cli "$@"
+# Set PYTHONPATH and run
+export PYTHONPATH="$INSTALL_DIR:$PYTHONPATH"
+exec $PYTHON_CMD -m odoo_manager.cli "$@"
 EOF
 
 chmod +x "$USER_BIN/odoo-manager"
