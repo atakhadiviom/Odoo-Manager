@@ -93,13 +93,15 @@ if [ $? -eq 0 ]; then
     echo "✓ Dependencies installed"
 else
     echo ""
-    echo "⚠️  Some dependencies failed. Trying alternative install..."
+    echo "⚠️  Regular install failed. Trying with --break-system-packages..."
     echo ""
-    # Try with --break-system-packages flag (for newer pip versions)
+    # Try with --break-system-packages flag (for newer Ubuntu/Debian)
     $PYTHON_CMD -m pip install -r "$INSTALL_DIR/requirements.txt" --break-system-packages 2>/dev/null && {
         echo "✓ Dependencies installed with --break-system-packages"
     } || {
         echo "⚠️  Warning: Dependency installation had issues"
+        echo "You may need to install manually:"
+        echo "  python3 -m pip install --break-system-packages -r $INSTALL_DIR/requirements.txt"
     }
 fi
 
