@@ -1,0 +1,75 @@
+#!/bin/bash
+# Git post-receive hook for Odoo Manager auto-deployment
+# Install this in .git/hooks/post-receive on your git server
+
+set -e
+
+# Configuration
+MANAGER_BIN="{{ odoo_manager_bin|default('/usr/local/bin/odoo-manager') }}"
+INSTANCE_NAME="{{ instance_name }}"
+ENVIRONMENT="{{ environment|default('development') }}"
+AUTO_DEPLOY="{{ auto_deploy|default('false') }}"
+DEPLOY_BRANCH_PREFIX="{{ deploy_branch_prefix|default('') }}"
+NOTIFICATION_WEBHOOK="{{ notification_webhook|default('') }}"
+
+# Function to log messages
+log() {
+    echo "[odoo-manager-hook] $*" >&2
+}
+
+# Function to send notification
+send_notification() {
+    local status="$1"
+    local message="$2"
+
+    if [ -n "$NOTIFICATION_WEBHOOK" ]; then
+        curl -s -X POST "$NOTIFICATION_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"$status\",\"message\":\"$message\",\"instance\":\"$INSTANCE_NAME\"}" \
+            >/dev/null 2>&1 || true
+    fi
+}
+
+# Read input
+while read oldrev newrev refname; do
+    branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+
+    log "Received push: branch=$branch, oldrev=$oldrev, newrev=$newrev"
+
+    # Check if we should deploy this branch
+    should_deploy=false
+
+    if [ "$AUTO_DEPLOY" = "true" ]; then
+        if [ -z "$DEPLOY_BRANCH_PREFIX" ]; then
+            # Deploy all branches if no prefix specified
+            should_deploy=true
+        elif [[ "$branch" == "$DEPLOY_BRANCH_PREFIX"* ]]; then
+            # Deploy only branches matching prefix
+            should_deploy=true
+        fi
+    fi
+
+    if [ "$should_deploy" = true ]; then
+        log "Deploying branch $branch to instance $INSTANCE_NAME"
+
+        # Trigger deployment
+        if command -v "$MANAGER_BIN" >/dev/null 2>&1; then
+            if $MANAGER_BIN env deploy "$branch" --environment "$ENVIRONMENT"; then
+                log "Deployment successful"
+                send_notification "success" "Deployed branch $branch to $ENVIRONMENT"
+            else
+                log "Deployment failed"
+                send_notification "failure" "Failed to deploy branch $branch to $ENVIRONMENT"
+                exit 1
+            fi
+        else
+            log "odoo-manager not found at $MANAGER_BIN"
+            send_notification "error" "odoo-manager binary not found"
+            exit 1
+        fi
+    else
+        log "Skipping deployment for branch $branch"
+    fi
+done
+
+log "Hook completed"

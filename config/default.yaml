@@ -1,0 +1,42 @@
+# Odoo Manager Default Configuration
+# This file contains default settings for Odoo Manager
+# Copy it to ~/.config/odoo-manager/config.yaml and modify as needed
+
+settings:
+  # Base directory for all instance data
+  data_dir: ~/odoo-manager/data
+
+  # Directory for backups
+  backup_dir: ~/odoo-manager/backups
+
+  # Directory for logs
+  log_dir: ~/odoo-manager/logs
+
+  # Default Odoo edition
+  default_edition: community
+
+  # Default deployment type
+  default_deployment: docker
+
+  # Default Odoo version
+  default_odoo_version: "17.0"
+
+# PostgreSQL global settings
+postgres:
+  host: localhost
+  port: 5432
+  user: odoo
+  password: odoo
+  superuser: postgres
+  image: postgres:15
+
+# Backup settings
+backup:
+  # Number of days to retain backups
+  retention_days: 30
+
+  # Compression format
+  compression: gzip
+
+  # Backup format (dump or zip)
+  format: dump

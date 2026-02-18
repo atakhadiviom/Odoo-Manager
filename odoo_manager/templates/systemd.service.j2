@@ -1,0 +1,49 @@
+[Unit]
+Description=Odoo Instance {{ instance.name }}
+Documentation=https://www.odoo.com
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User={{ user|default('odoo') }}
+Group={{ user|default('odoo') }}
+
+WorkingDirectory={{ source_dir }}
+Environment="PYTHONPATH={{ source_dir }}"
+Environment="PYTHONUNBUFFERED=1"
+
+# Odoo command
+ExecStart={{ venv_dir }}/bin/python {{ odoo_bin }} -c {{ config_file }}
+
+# Output logging
+StandardOutput=append:{{ log_dir }}/odoo.log
+StandardError=append:{{ log_dir }}/odoo.log
+
+# Resource limits
+{% if instance.limit_memory_hard %}
+LimitMEMLOCK=infinity
+LimitRSS={{ instance.limit_memory_hard }}
+{% endif %}
+{% if instance.limit_time_cpu %}
+LimitCPU={{ instance.limit_time_cpu }}
+{% endif %}
+{% if instance.limit_time_real %}
+LimitSIGPENDING={{ instance.limit_time_real }}
+{% endif %}
+
+# Restart settings
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ data_dir }} {{ log_dir }}
+
+[Install]
+WantedBy=multi-user.target

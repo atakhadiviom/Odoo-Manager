@@ -1,0 +1,54 @@
+[options]
+; Database settings
+db_host = {{ db_host }}
+db_port = {{ db_port }}
+db_user = {{ db_user }}
+db_password = {{ db_password }}
+dbfilter = {{ db_filter }}
+
+; Server settings
+http_port = {{ http_port | default(8069) }}
+longpolling_port = {{ longpolling_port | default(8072) }}
+workers = {{ workers | default(4) }}
+max_cron_threads = {{ max_cron_threads | default(2) }}
+db_maxconn = {{ db_maxconn | default(64) }}
+
+; Paths
+addons_path = {{ addons_path | default('./addons') }}
+data_dir = {{ data_dir }}
+
+; Security
+admin_passwd = {{ admin_password | default('admin') }}
+list_db = {{ list_db | default(True) }}
+proxy_mode = {{ proxy_mode | default(False) }}
+
+; Logging
+log_level = {{ log_level | default('info') }}
+log_handler = {{ log_handler | default(':INFO') }}
+log_db = {{ log_db | default(False) }}
+
+; Email
+; smtp_server = localhost
+; smtp_port = 25
+; smtp_user = False
+; smtp_password = False
+
+; Demo
+without_demo = {{ without_demo | default(True) }}
+
+; Other
+{% if limit_request %}
+limit_request = {{ limit_request }}
+{% endif %}
+{% if limit_memory_hard %}
+limit_memory_hard = {{ limit_memory_hard }}
+{% endif %}
+{% if limit_memory_soft %}
+limit_memory_soft = {{ limit_memory_soft }}
+{% endif %}
+{% if limit_time_cpu %}
+limit_time_cpu = {{ limit_time_cpu }}
+{% endif %}
+{% if limit_time_real %}
+limit_time_real = {{ limit_time_real }}
+{% endif %}

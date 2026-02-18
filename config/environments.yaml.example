@@ -1,0 +1,49 @@
+# Example Environments Configuration for Odoo Manager
+# Copy this file to environments.yaml and customize for your needs
+
+environments:
+  # Development environment
+  development:
+    tier: dev
+    auto_deploy_branches:
+      - "dev/*"
+      - "feature/*"
+      - "bugfix/*"
+    workers: 2
+    db_filter: "^dev$"
+    port: 8069
+    env_vars:
+      ODOO_LOG_LEVEL: "debug"
+    ssl_enabled: false
+    backup_schedule: "0 2 * * *"  # Daily at 2 AM
+
+  # Staging environment
+  staging:
+    tier: staging
+    auto_deploy_branches:
+      - "staging"
+      - "test/*"
+    workers: 4
+    db_filter: "^staging$"
+    port: 8070
+    env_vars:
+      ODOO_LOG_LEVEL: "info"
+    ssl_enabled: true
+    ssl_domain: "staging.example.com"
+    backup_schedule: "0 3 * * *"  # Daily at 3 AM
+
+  # Production environment
+  production:
+    tier: production
+    auto_deploy_branches:
+      - "main"
+      - "master"
+      - "production"
+    workers: 8
+    db_filter: "^prod$"
+    port: 8071
+    env_vars:
+      ODOO_LOG_LEVEL: "warn"
+    ssl_enabled: true
+    ssl_domain: "odoo.example.com"
+    backup_schedule: "0 1 * * *"  # Daily at 1 AM
