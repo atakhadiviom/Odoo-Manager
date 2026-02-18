@@ -53,6 +53,7 @@ dev = [
 [project.scripts]
 odoo-manager = "odoo_manager.cli:main"
 om = "odoo_manager.cli:main"
+odoo-menu = "bash odoo-manager-menu"
 
 [project.urls]
 Homepage = "https://github.com/atakhadiviom/Odoo-Manager"
