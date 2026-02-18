@@ -19,7 +19,6 @@ def instance_cli():
     pass
 
 
-@instance_cli.command(name="ls")
 @instance_cli.command(name="list")
 def list_instances():
     """List all Odoo instances."""
@@ -55,6 +54,13 @@ def list_instances():
         )
 
     console.print(table)
+
+
+@instance_cli.command(name="ls")
+def ls():
+    """List all Odoo instances (alias for list)."""
+    ctx = click.get_current_context()
+    ctx.invoke(list_instances)
 
 
 @instance_cli.command()
