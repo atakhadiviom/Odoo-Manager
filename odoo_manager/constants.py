@@ -16,7 +16,7 @@ DEFAULT_BACKUP_DIR = Path.home() / "odoo-manager" / "backups"
 DEFAULT_LOG_DIR = Path.home() / "odoo-manager" / "logs"
 
 # Odoo defaults
-DEFAULT_ODOO_VERSION = "17.0"
+DEFAULT_ODOO_VERSION = "master"
 DEFAULT_ODOO_PORT = 8069
 DEFAULT_ODOO_WORKERS = 4
 DEFAULT_ODOO_MAX_CRON_THREADS = 2

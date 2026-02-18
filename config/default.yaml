@@ -19,7 +19,7 @@ settings:
   default_deployment: docker
 
   # Default Odoo version
-  default_odoo_version: "17.0"
+  default_odoo_version: "master"
 
 # PostgreSQL global settings
 postgres:

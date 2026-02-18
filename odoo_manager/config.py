@@ -22,6 +22,7 @@ from odoo_manager.constants import (
     DEFAULT_DATA_DIR,
     DEFAULT_DOCKER_IMAGE,
     DEFAULT_LOG_DIR,
+    DEFAULT_ODOO_VERSION,
     DEFAULT_POSTGRES_DB,
     DEFAULT_POSTGRES_IMAGE,
     DEFAULT_POSTGRES_PASSWORD,
@@ -154,7 +155,7 @@ class SettingsConfig(BaseModel):
     log_dir: Path = DEFAULT_LOG_DIR
     default_edition: str = EDITION_COMMUNITY
     default_deployment: str = "docker"
-    default_odoo_version: str = "17.0"
+    default_odoo_version: str = DEFAULT_ODOO_VERSION
 
     @field_validator("default_edition")
     @classmethod
@@ -175,7 +176,7 @@ class InstanceConfig(BaseModel):
     """Configuration for a single Odoo instance."""
 
     name: str
-    version: str = "17.0"
+    version: str = DEFAULT_ODOO_VERSION
     edition: str = EDITION_COMMUNITY
     deployment_type: str = "docker"
     port: int = 8069
