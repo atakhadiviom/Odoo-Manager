@@ -93,8 +93,8 @@ def show_interactive_menu():
                 app = OdooManagerApp()
                 app.run()
             except ImportError:
-                console.print("[red]TUI not available. Installing textual...[/red]")
-                subprocess.call(["pip", "install", "textual"])
+                console.print("[yellow]TUI not available. Please install textual:[/yellow]")
+                console.print("  pip install --break-system-packages textual")
             except Exception as e:
                 console.print(f"[red]Error launching TUI: {e}[/red]")
             input("\nPress Enter to continue...")
@@ -136,7 +136,7 @@ def show_interactive_menu():
 def execute_command(cmd: list):
     """Execute a command and return to menu."""
     console.print(f"\n[dim]Executing: {' '.join(cmd)}[/dim]\n")
-    result = subprocess.run(cmd)
+    result = subprocess.run(cmd, shell=False, stdin=subprocess.DEVNULL)
     input("\nPress Enter to continue...")
 
 

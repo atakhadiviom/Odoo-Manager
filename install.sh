@@ -94,7 +94,8 @@ cd "$INSTALL_DIR" 2>/dev/null || {
 
 # Set PYTHONPATH and run
 export PYTHONPATH="$INSTALL_DIR:$PYTHONPATH"
-exec $PYTHON_CMD -m odoo_manager.cli "$@"
+# Execute with proper argument handling
+"$PYTHON_CMD" -m odoo_manager.cli "$@"
 EOF
 
 chmod +x "$USER_BIN/odoo-manager"
