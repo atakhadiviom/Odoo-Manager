@@ -23,6 +23,7 @@ from odoo_manager.commands.scheduler import scheduler_cli
 from odoo_manager.commands.ssh import ssh_cli
 from odoo_manager.commands.user import user_cli
 from odoo_manager.commands.ssl import ssl_cli
+from odoo_manager.commands.tui import tui_cli
 from odoo_manager.constants import DEFAULT_CONFIG_FILE
 from odoo_manager.utils.output import success, error
 
@@ -75,6 +76,7 @@ main.add_command(scheduler_cli)
 main.add_command(ssh_cli)
 main.add_command(user_cli)
 main.add_command(ssl_cli)
+main.add_command(tui_cli)
 
 
 if __name__ == "__main__":

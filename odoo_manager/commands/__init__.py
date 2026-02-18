@@ -15,6 +15,7 @@ from odoo_manager.commands.scheduler import scheduler_cli
 from odoo_manager.commands.ssh import ssh_cli
 from odoo_manager.commands.user import user_cli
 from odoo_manager.commands.ssl import ssl_cli
+from odoo_manager.commands.tui import tui_cli
 
 __all__ = [
     "instance_cli",
@@ -32,4 +33,5 @@ __all__ = [
     "ssh_cli",
     "user_cli",
     "ssl_cli",
+    "tui_cli",
 ]

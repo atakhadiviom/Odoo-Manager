@@ -11,7 +11,15 @@ A local Odoo instance management tool similar to [odoo.sh](https://www.odoo.sh) 
 - **Backup/restore** - Scheduled backups with retention policies
 - **Configuration management** - Unified config for all instances
 - **Docker deployment** - Docker-based deployment using docker-compose
+- **Source deployment** - Traditional Python installation with systemd
 - **Odoo shell access** - Interactive shell for debugging
+- **Terminal UI (TUI)** - Panel-style interface for visual management
+- **Git integration** - Clone repositories, manage branches, deploy from git
+- **Multi-environment** - Dev, staging, production workflow support
+- **CI/CD pipeline** - Pre-deployment validation, automated rollbacks
+- **Health monitoring** - Resource usage tracking, auto-restart on failure
+- **SSH access** - Remote shell and file transfer capabilities
+- **SSL/TLS** - Let's Encrypt and custom certificate support
 
 ## Installation
 
@@ -178,6 +186,61 @@ odoo-manager shell myinstance
 
 # Open shell for specific database
 odoo-manager shell myinstance --database mydb
+```
+
+### Terminal UI (TUI)
+
+```bash
+# Launch the panel-style terminal interface
+odoo-manager ui
+```
+
+The TUI provides:
+- **Dashboard** - Overview of all instances with status indicators
+- **Instance Management** - Start, stop, restart with button clicks
+- **Resource Monitoring** - Real-time CPU and memory usage
+- **Log Viewing** - Integrated log viewer with auto-scroll
+- **Action Panel** - Quick access to common operations
+
+Keyboard shortcuts in TUI:
+- `q` - Quit
+- `r` - Refresh
+- `s` - Start selected instance
+- `t` - Stop selected instance
+- `R` - Restart selected instance
+- `l` - View logs
+- `tab` - Navigate between panels
+
+### Git Integration
+
+```bash
+# Clone a repository
+odoo-manager git clone https://github.com/odoo/odoo.git
+
+# List repositories
+odoo-manager git ls
+
+# Switch branches
+odoo-manager git checkout odoo 17.0
+
+# Pull latest changes
+odoo-manager git pull odoo
+```
+
+### Environment Management
+
+```bash
+# List environments
+odoo-manager env ls
+
+# Create environment
+odoo-manager env create dev --tier dev
+
+# Deploy to environment
+odoo-manager env deploy 17.0 --environment dev
+
+# Promote to staging
+odoo-manager env promote dev staging
 ```
 
 ### Configuration
