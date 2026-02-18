@@ -15,26 +15,12 @@ elif command -v python &> /dev/null; then
     PYTHON_CMD="python"
 else
     echo "Error: Python 3.11+ is required but not installed."
-    echo "Install Python first and try again."
     exit 1
 fi
 
 # Check Python version
 PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
 echo "Found Python: $PYTHON_CMD $PYTHON_VERSION"
-
-if [ "$(echo "$PYTHON_VERSION" | cut -d. -f2)" -lt 11 ]; then
-    echo "Error: Python 3.11+ is required but found $PYTHON_VERSION"
-    exit 1
-fi
-
-# Check if pip is available
-echo ""
-echo "Checking pip..."
-if ! $PYTHON_CMD -m pip --version &>/dev/null; then
-    echo "pip is not installed. Installing pip..."
-    curl -sS https://bootstrap.pypa.io/get-pip.py | $PYTHON_CMD
-fi
 
 # Create install directory
 echo ""
@@ -44,13 +30,16 @@ mkdir -p "$INSTALL_DIR"
 
 # Download the code
 echo "Downloading from GitHub..."
-git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" 2>/dev/null || {
-    echo "Trying full clone..."
+if [ -d "$INSTALL_DIR/.git" ]; then
+    echo "Updating existing installation..."
+    cd "$INSTALL_DIR" && git pull
+else
+    rm -rf "$INSTALL_DIR" 2>/dev/null || true
     git clone https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" || {
         echo "Error: Failed to clone repository"
         exit 1
     }
-}
+fi
 echo "✓ Downloaded to $INSTALL_DIR"
 
 # Install dependencies
@@ -58,51 +47,18 @@ echo ""
 echo "Installing Python dependencies..."
 cd "$INSTALL_DIR"
 
-# Upgrade pip first
-echo "Upgrading pip..."
-$PYTHON_CMD -m pip install --upgrade pip --user
-
-# Install requirements from pyproject.toml or use explicit list
-echo "Installing required packages..."
-
-# Try using requirements.txt approach from pyproject.toml dependencies
-cat > "$INSTALL_DIR/requirements.txt" << 'REQEOF'
-click>=8.1.0
-rich>=13.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-pyyaml>=6.0
-jinja2>=3.1.0
-psycopg2-binary>=2.9.0
-docker>=6.0.0
-requests>=2.28.0
-humanfriendly>=10.0.0
-textual>=0.44.0
-GitPython>=3.1.0
-APScheduler>=3.10.0
-psutil>=5.9.0
-paramiko>=3.0.0
-httpx>=0.24.0
-cryptography>=41.0.0
-REQEOF
-
-echo "Running: pip install --user -r requirements.txt"
-$PYTHON_CMD -m pip install --user -r "$INSTALL_DIR/requirements.txt"
+# Single pip install command with all dependencies
+echo "This may take a few minutes..."
+python3 -m pip install --break-system-packages \
+    click rich pydantic pydantic-settings pyyaml jinja2 \
+    psycopg2-binary requests humanfriendly textual \
+    GitPython APScheduler psutil paramiko httpx cryptography docker
 
 if [ $? -eq 0 ]; then
     echo "✓ Dependencies installed"
 else
-    echo ""
-    echo "⚠️  Regular install failed. Trying with --break-system-packages..."
-    echo ""
-    # Try with --break-system-packages flag (for newer Ubuntu/Debian)
-    $PYTHON_CMD -m pip install -r "$INSTALL_DIR/requirements.txt" --break-system-packages 2>/dev/null && {
-        echo "✓ Dependencies installed with --break-system-packages"
-    } || {
-        echo "⚠️  Warning: Dependency installation had issues"
-        echo "You may need to install manually:"
-        echo "  python3 -m pip install --break-system-packages -r $INSTALL_DIR/requirements.txt"
-    }
+    echo "⚠️  Some dependencies failed to install"
+    echo "The application may still work if core packages were installed"
 fi
 
 # Create executable command
@@ -120,10 +76,8 @@ cat > "$USER_BIN/odoo-manager" << 'EOF'
 INSTALL_DIR="$HOME/odoo-manager"
 
 # Find Python
-PYTHON_CMD=""
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
+PYTHON_CMD="python3"
+if ! command -v python3 &> /dev/null; then
     PYTHON_CMD="python"
 fi
 
@@ -135,7 +89,6 @@ fi
 # Run from install directory
 cd "$INSTALL_DIR" 2>/dev/null || {
     echo "Error: odoo-manager not installed properly"
-    echo "Run: bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)"
     exit 1
 }
 
