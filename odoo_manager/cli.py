@@ -14,7 +14,7 @@ from odoo_manager.commands.module import module_cli
 from odoo_manager.commands.logs import logs_cli
 from odoo_manager.commands.backup import backup_cli
 from odoo_manager.commands.config import config_cli
-from odoo_manager.commands.shell import shell_cli
+from odoo_manager.commands.shell import shell_cmd
 from odoo_manager.commands.git import git_cli
 from odoo_manager.commands.environment import env_cli
 from odoo_manager.commands.deploy import deploy_cli
@@ -67,7 +67,7 @@ main.add_command(module_cli)
 main.add_command(backup_cli)
 main.add_command(logs_cli)
 main.add_command(config_cli)
-main.add_command(shell_cli)
+main.add_command(shell_cmd)
 main.add_command(git_cli)
 main.add_command(env_cli)
 main.add_command(deploy_cli)
