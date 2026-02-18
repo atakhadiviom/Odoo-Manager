@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-line installer for Odoo Manager
-# Usage: bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-refs/heads/main/install.sh)
+# Usage: bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)
 
 set -e
 
@@ -25,26 +25,76 @@ if [ "$(echo "$PYTHON_VERSION" | cut -d. -f2)" -lt 11 ]; then
     exit 1
 fi
 
-# Create temp directory
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR"
+# Detect user bin directory
+USER_BIN="$HOME/.local/bin"
+if [ -d "$HOME/bin" ]; then
+    USER_BIN="$HOME/bin"
+fi
+
+# Ensure user bin directory exists
+mkdir -p "$USER_BIN" 2>/dev/null || true
 
 # Run installation
 echo ""
 echo "Installing odoo-manager..."
-$PYTHON_CMD -m pip install --upgrade pip setuptools wheel &> /dev/null
 
-# Install from GitHub
-if $PYTHON_CMD -m pip install git+https://github.com/atakhadiviom/Odoo-Manager.git@main 2>/dev/null || \
-$PYTHON_CMD -m pip install --upgrade git+https://github.com/atakhadiviom/Odoo-Manager.git@main 2>/dev/null; then
+# Upgrade pip first
+$PYTHON_CMD -m pip install --upgrade pip setuptools wheel 2>/dev/null || true
 
+# Install from GitHub (try with --user flag to ensure binaries are accessible)
+INSTALL_SUCCESS=false
+
+# Try regular install first
+if $PYTHON_CMD -m pip install git+https://github.com/atakhadiviom/Odoo-Manager.git@main 2>/dev/null; then
+    INSTALL_SUCCESS=true
+# Try with --user flag
+elif $PYTHON_CMD -m pip install --user git+https://github.com/atakhadiviom/Odoo-Manager.git@main 2>/dev/null; then
+    INSTALL_SUCCESS=true
+# Try upgrade with --user
+elif $PYTHON_CMD -m pip install --user --upgrade git+https://github.com/atakhadiviom/Odoo-Manager.git@main 2>/dev/null; then
+    INSTALL_SUCCESS=true
+fi
+
+if [ "$INSTALL_SUCCESS" = true ]; then
     echo ""
     echo -e "\033[0;32m✓ Odoo Manager installed successfully!\033[0m"
     echo ""
+
+    # Check if command is available
+    if ! command -v odoo-manager &> /dev/null; then
+        # Find where pip installed the package
+        SCRIPT_LOCATION=$($PYTHON_CMD -m pip show odoo-manager 2>/dev/null | grep "Location:" | cut -d' ' -f2)
+        if [ -n "$SCRIPT_LOCATION" ]; then
+            if [ -f "$SCRIPT_LOCATION/odoo_manager/cli.py" ]; then
+                # Create wrapper script
+                cat > "$USER_BIN/odoo-manager" << WRAPPER_EOF
+#!/bin/bash
+exec $PYTHON_CMD -m odoo_manager.cli "\$@"
+WRAPPER_EOF
+                chmod +x "$USER_BIN/odoo-manager"
+
+                # Create symlink for short command
+                ln -sf "$USER_BIN/odoo-manager" "$USER_BIN/om" 2>/dev/null || true
+            fi
+        fi
+
+        # Check if PATH needs updating
+        if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
+            echo "⚠️  Add $USER_BIN to your PATH:"
+            echo ""
+            echo "  echo 'export PATH=\"\$PATH:$USER_BIN\"' >> ~/.bashrc"
+            echo "  source ~/.bashrc"
+            echo ""
+            echo "Or run this command for the current session:"
+            echo "  export PATH=\"\$PATH:$USER_BIN\""
+            echo ""
+        fi
+    fi
+
     echo "Available commands:"
     echo "  odoo-manager  - Main CLI tool"
     echo "  om            - Short command"
-    echo "  odoo-manager ui  - Terminal UI (panel interface)"
+    echo "  odoo-menu     - Interactive menu"
     echo ""
     echo "Quick start:"
     echo "  odoo-manager instance create myinstance"
@@ -54,12 +104,12 @@ $PYTHON_CMD -m pip install --upgrade git+https://github.com/atakhadiviom/Odoo-Ma
 
 else
     echo ""
-    echo -e "\033[0;31m✗ Installation failed\033[0m"
-    echo ""
-    echo "Trying alternative installation method..."
+    echo -e "\033[0;31m✗ pip installation failed, trying alternative method...\033[0m"
 
     # Clone and install
+    TEMP_DIR=$(mktemp -d)
     REPO_DIR="$TEMP_DIR/odoo-manager"
+
     git clone --depth 1 https://github.com/atakhadiviom/Odoo-Manager.git "$REPO_DIR" 2>/dev/null || {
         echo "Error: Failed to clone repository"
         rm -rf "$TEMP_DIR"
@@ -67,18 +117,35 @@ else
     }
 
     cd "$REPO_DIR"
-    $PYTHON_CMD -m pip install -e . 2>/dev/null || {
+
+    # Try editable install
+    if $PYTHON_CMD -m pip install -e . 2>/dev/null || $PYTHON_CMD -m pip install --user -e . 2>/dev/null; then
+        echo ""
+        echo -e "\033[0;32m✓ Odoo Manager installed successfully!\033[0m"
+        echo ""
+
+        # Create wrapper script if needed
+        if ! command -v odoo-manager &> /dev/null; then
+            cat > "$USER_BIN/odoo-manager" << WRAPPER_EOF
+#!/bin/bash
+cd "$REPO_DIR" 2>/dev/null || true
+exec $PYTHON_CMD -m odoo_manager.cli "\$@"
+WRAPPER_EOF
+            chmod +x "$USER_BIN/odoo-manager"
+            ln -sf "$USER_BIN/odoo-manager" "$USER_BIN/om" 2>/dev/null || true
+
+            if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
+                echo "⚠️  Add $USER_BIN to your PATH:"
+                echo "  export PATH=\"\$PATH:$USER_BIN\""
+            fi
+        fi
+
+        echo "Available commands: odoo-manager, om"
+    else
         echo "Error: Failed to install package"
         rm -rf "$TEMP_DIR"
         exit 1
-    }
-
-    echo ""
-    echo -e "\033[0;32m✓ Odoo Manager installed successfully!\033[0m"
-    echo ""
-    echo "Available commands:"
-    echo "  odoo-manager"
-    echo "  om"
+    fi
 
     rm -rf "$TEMP_DIR"
 fi
