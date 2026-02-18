@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import jinja2
-from docker import DockerException, from_env
+from docker import from_env
 from docker.errors import DockerException as DockerError
 from docker.models.containers import Container
 
