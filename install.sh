@@ -74,6 +74,7 @@ pydantic-settings>=2.0.0
 pyyaml>=6.0
 jinja2>=3.1.0
 psycopg2-binary>=2.9.0
+docker>=6.0.0
 requests>=2.28.0
 humanfriendly>=10.0.0
 textual>=0.44.0
