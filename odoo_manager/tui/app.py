@@ -183,11 +183,30 @@ class SimpleTUI:
         # Environment
         console.print("\n[bold]Select Environment:[/bold]")
         console.print("  [1]  Development    - Fresh DB with demo data")
-        console.print("  [2]  Staging        - Test with production data")
-        console.print("  [3]  Production     - Live environment")
+        console.print("  [2]  Staging        - Copy from production database")
+        console.print("  [3]  Production     - Fresh database, no demo data")
         env_choice = input("\nSelect environment (1-3): ").strip()
         environments = {"1": Instance.ENV_DEV, "2": Instance.ENV_STAGING, "3": Instance.ENV_PRODUCTION}
         environment = environments.get(env_choice, Instance.ENV_DEV)
+
+        # For staging, ask for source instance
+        source_instance_name = None
+        if environment == Instance.ENV_STAGING:
+            console.print("\n[bold]Select Production Instance to Copy:[/bold]")
+            prod_instances = [i for i in self.manager.list_instances()
+                             if i.config.environment == Instance.ENV_PRODUCTION]
+
+            if not prod_instances:
+                console.print("[yellow]No production instances found. Creating with fresh database.[/yellow]")
+            else:
+                for i, inst in enumerate(prod_instances, 1):
+                    console.print(f"  [{i}]  {inst.config.name}")
+                console.print("  [0]  Fresh database (no copy)")
+
+                source_choice = input("\nSelect source instance: ").strip()
+                if source_choice != "0" and source_choice.isdigit() and 1 <= int(source_choice) <= len(prod_instances):
+                    source_instance_name = prod_instances[int(source_choice) - 1].config.name
+                    console.print(f"[cyan]Will copy database from: {source_instance_name}[/cyan]")
 
         # Port
         port = input(f"\nEnter port (default 8069): ").strip()
@@ -197,12 +216,14 @@ class SimpleTUI:
         git_repo = input("\nGit repository URL (optional, press Enter to skip): ").strip() or None
 
         # Summary
+        source_info = f"Source DB: {source_instance_name}" if source_instance_name else "Source DB: Fresh database"
         console.print(Panel(
             f"""[bold]Summary[/bold]
 
   Name:         [cyan]{name}[/cyan]
   Version:      [cyan]{version}[/cyan]
   Environment:  [cyan]{environment}[/cyan]
+  {source_info}
   Port:         [cyan]{port}[/cyan]
   Git Repo:     [cyan]{git_repo or 'None'}[/cyan]
 
@@ -243,6 +264,20 @@ class SimpleTUI:
                 git_mgr = GitManager(instance)
                 git_mgr.clone_repo(git_repo)
                 console.print(f"[green]Repository cloned![/green]")
+
+            # For staging, copy database from source
+            if environment == Instance.ENV_STAGING and source_instance_name:
+                console.print(f"[dim]Copying database from {source_instance_name}...[/dim]")
+                from odoo_manager.database import DatabaseManager
+                source_inst = self.manager.get_instance(source_instance_name)
+                if source_inst:
+                    db_mgr = DatabaseManager(source_inst)
+                    # Backup source database
+                    backup_path = db_mgr.backup()
+                    # Restore to new instance
+                    target_db_mgr = DatabaseManager(instance)
+                    target_db_mgr.restore(backup_path, instance.config.db_name)
+                    console.print(f"[green]Database copied![/green]")
 
             # Start instance
             console.print(f"[dim]Starting instance...[/dim]")
