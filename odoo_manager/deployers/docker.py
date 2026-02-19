@@ -83,36 +83,6 @@ def get_docker_compose_command() -> list[str]:
     return docker_cmd + ["compose"]
 
 
-def get_docker_compose_command() -> list[str]:
-    """Get the appropriate docker-compose command."""
-    try:
-        result = subprocess.run(
-            ["docker", "compose", "version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return ["docker", "compose"]
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    try:
-        result = subprocess.run(
-            ["docker-compose", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return ["docker-compose"]
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    # Default to docker compose (plugin version)
-    return ["docker", "compose"]
-
-
 class DockerDeployer(BaseDeployer):
     """Docker deployment strategy using docker-compose."""
 
@@ -143,6 +113,29 @@ class DockerDeployer(BaseDeployer):
         """Create the instance deployment."""
         self.ensure_data_dir()
         self._generate_compose_file()
+
+    def _migrate_compose_file(self) -> None:
+        """Migrate old compose files to new format."""
+        if not self.compose_file.exists():
+            return
+
+        with open(self.compose_file, "r") as f:
+            content = f.read()
+
+        # Remove obsolete version line
+        lines = content.split("\n")
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith("version:") or line.strip().startswith("'version:"):
+                continue  # Skip version line
+            new_lines.append(line)
+
+        new_content = "\n".join(new_lines)
+
+        # Only write if changed
+        if new_content != content:
+            with open(self.compose_file, "w") as f:
+                f.write(new_content)
 
     def _ensure_docker(self) -> None:
         """Ensure Docker is installed and running."""
@@ -178,6 +171,9 @@ class DockerDeployer(BaseDeployer):
 
         if not self.compose_file.exists():
             self.create()
+        else:
+            # Migrate old compose files to new format
+            self._migrate_compose_file()
 
         # Refresh compose command in case Docker was just installed
         self.compose_cmd = get_docker_compose_command()
