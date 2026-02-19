@@ -713,7 +713,6 @@ class OdooManagerTUI(App):
     .subheader-text {
         text-style: bold;
         padding: 1 0;
-        dim: false;
     }
 
     .dim-text {
@@ -765,7 +764,6 @@ class OdooManagerTUI(App):
 
     .stat-value {
         text-style: bold;
-        font-size: 200%;
     }
 
     /* Action buttons */
