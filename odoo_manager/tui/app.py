@@ -31,8 +31,6 @@ from textual.widgets import (
     Select,
     SelectionList,
     Markdown,
-    ContentTabs,
-    Tab,
 )
 from textual.reactive import reactive
 from textual.binding import Binding
