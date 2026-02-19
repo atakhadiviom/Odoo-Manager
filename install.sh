@@ -150,23 +150,22 @@ chmod +x "$USER_BIN/om"
 echo "✓ Created command: $USER_BIN/odoo-manager"
 echo "✓ Created command: $USER_BIN/om"
 
-# Check PATH
+# Automatically add to PATH if not already there
 echo ""
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
-    echo "=========================================="
-    echo "⚠️  IMPORTANT: Add to PATH"
-    echo "=========================================="
-    echo ""
-    echo "Run this command:"
-    echo "  echo 'export PATH=\"\$PATH:$USER_BIN\"' >> ~/.bashrc"
-    echo "  source ~/.bashrc"
-    echo ""
-    echo "Or for current session:"
-    echo "  export PATH=\"\$PATH:$USER_BIN\""
-    echo ""
-    echo "=========================================="
+    # Add to .bashrc for future sessions
+    if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
+        echo "" >> ~/.bashrc
+        echo "# Odoo Manager" >> ~/.bashrc
+        echo "export PATH=\"\$PATH:$USER_BIN\"" >> ~/.bashrc
+        echo "✓ Added $USER_BIN to PATH in ~/.bashrc"
+    fi
+
+    # Add to current session
+    export PATH="$PATH:$USER_BIN"
+    echo "✓ Added $USER_BIN to current session"
 else
-    echo "✓ $USER_BIN is in PATH"
+    echo "✓ $USER_BIN is already in PATH"
 fi
 
 echo ""
