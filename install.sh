@@ -159,8 +159,9 @@ echo ""
 echo "Creating system-wide commands..."
 SYMLINK_OK=false
 
-# Try with sudo first (most common on servers)
+# Remove old symlinks first (if they exist as regular files or broken symlinks)
 if command -v sudo &> /dev/null; then
+    sudo rm -f /usr/local/bin/odoo-manager /usr/local/bin/om 2>/dev/null
     sudo ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null && \
     sudo ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null && \
     SYMLINK_OK=true
@@ -168,6 +169,7 @@ fi
 
 # If sudo didn't work, try direct write
 if [ "$SYMLINK_OK" = false ] && [ -w /usr/local/bin ]; then
+    rm -f /usr/local/bin/odoo-manager /usr/local/bin/om 2>/dev/null
     ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null && \
     ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null && \
     SYMLINK_OK=true
@@ -175,7 +177,7 @@ fi
 
 if [ "$SYMLINK_OK" = true ]; then
     echo "✓ Created system-wide symlinks in /usr/local/bin"
-    ODOO_CMD="odoo-manager"
+    ODOO_CMD="$USER_BIN/odoo-manager"
 else
     echo "⚠️  Could not create symlinks in /usr/local/bin"
     echo "   Using full path to command..."
