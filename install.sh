@@ -89,7 +89,11 @@ cd "$INSTALL_DIR"
 
 # Single pip install command with all dependencies
 echo "This may take a few minutes..."
-python3 -m pip install --break-system-packages \
+$PYTHON_CMD -m pip install --user --break-system-packages \
+    click rich pydantic pydantic-settings pyyaml jinja2 \
+    psycopg2-binary requests humanfriendly textual \
+    GitPython APScheduler psutil paramiko httpx cryptography docker 2>/dev/null || \
+$PYTHON_CMD -m pip install --break-system-packages \
     click rich pydantic pydantic-settings pyyaml jinja2 \
     psycopg2-binary requests humanfriendly textual \
     GitPython APScheduler psutil paramiko httpx cryptography docker
@@ -150,52 +154,39 @@ chmod +x "$USER_BIN/om"
 echo "✓ Created command: $USER_BIN/odoo-manager"
 echo "✓ Created command: $USER_BIN/om"
 
-# Try to create symlinks in /usr/local/bin (system-wide, always in PATH)
+# Create symlinks in /usr/local/bin (system-wide, always in PATH)
 echo ""
 echo "Creating system-wide commands..."
-SYMLINK_CREATED=false
+SYMLINK_OK=false
 
-if [ -w /usr/local/bin ]; then
-    ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
-    ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
-    if [ -L /usr/local/bin/odoo-manager ]; then
-        echo "✓ Created system-wide symlinks in /usr/local/bin"
-        SYMLINK_CREATED=true
-    fi
+# Try with sudo first (most common on servers)
+if command -v sudo &> /dev/null; then
+    sudo ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null && \
+    sudo ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null && \
+    SYMLINK_OK=true
 fi
 
-if [ "$SYMLINK_CREATED" = false ]; then
-    # Use sudo if available
-    if command -v sudo &> /dev/null; then
-        sudo ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
-        sudo ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
-        if [ -L /usr/local/bin/odoo-manager ]; then
-            echo "✓ Created system-wide symlinks in /usr/local/bin (with sudo)"
-            SYMLINK_CREATED=true
-        fi
-    fi
+# If sudo didn't work, try direct write
+if [ "$SYMLINK_OK" = false ] && [ -w /usr/local/bin ]; then
+    ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null && \
+    ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null && \
+    SYMLINK_OK=true
 fi
 
-if [ "$SYMLINK_CREATED" = false ]; then
-    echo "⚠️  Could not create system-wide symlinks"
-    echo "   Adding ~/.local/bin to .bashrc instead..."
+if [ "$SYMLINK_OK" = true ]; then
+    echo "✓ Created system-wide symlinks in /usr/local/bin"
+    ODOO_CMD="odoo-manager"
+else
+    echo "⚠️  Could not create symlinks in /usr/local/bin"
+    echo "   Using full path to command..."
+    ODOO_CMD="$USER_BIN/odoo-manager"
+
+    # Add to .bashrc for future sessions
     if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
         echo "" >> ~/.bashrc
         echo "# Odoo Manager" >> ~/.bashrc
         echo "export PATH=\"\$PATH:$USER_BIN\"" >> ~/.bashrc
-        echo "✓ Added to PATH in ~/.bashrc"
-        echo ""
-        echo "   Run: source ~/.bashrc"
-    fi
-fi
-
-# Also add to .bashrc for shell sessions
-if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
-    if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
-        echo "" >> ~/.bashrc
-        echo "# Odoo Manager" >> ~/.bashrc
-        echo "export PATH=\"\$PATH:$USER_BIN\"" >> ~/.bashrc
-        echo "✓ Added $USER_BIN to PATH in ~/.bashrc"
+        echo "✓ Added $USER_BIN to ~/.bashrc for future sessions"
     fi
 fi
 
@@ -205,12 +196,6 @@ echo "Installation Complete!"
 echo "=========================================="
 echo ""
 
-# Test the command immediately
-echo "Testing odoo-manager..."
-"$USER_BIN/odoo-manager" --help
-
-echo ""
-echo "Quick start:"
-echo "  odoo-manager config init"
-echo "  odoo-manager instance create myinstance"
-echo ""
+# Launch odoo-manager interactive menu
+echo "Launching Odoo Manager..."
+$ODOO_CMD
