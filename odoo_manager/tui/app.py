@@ -418,11 +418,9 @@ class OdooManagerTUI(App):
         )
         yield Footer()
 
-        # Initial view - instance list
-        self.show_instances()
-
     def on_mount(self) -> None:
         """Initialize on mount."""
+        self.show_instances()
         self.update_status()
 
     def show_instances(self) -> None:
