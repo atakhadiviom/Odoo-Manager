@@ -136,7 +136,14 @@ def show_interactive_menu():
 def execute_command(cmd: list):
     """Execute a command and return to menu."""
     console.print(f"\n[dim]Executing: {' '.join(cmd)}[/dim]\n")
-    result = subprocess.run(cmd, shell=False, stdin=subprocess.DEVNULL)
+
+    # Find the actual command path
+    if cmd[0] == "odoo-manager":
+        # Use the wrapper script directly
+        cmd[0] = os.path.expanduser("~/.local/bin/odoo-manager")
+
+    # Run the command
+    result = subprocess.run(cmd, shell=False)
     input("\nPress Enter to continue...")
 
 
