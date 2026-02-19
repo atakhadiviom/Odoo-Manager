@@ -1,11 +1,9 @@
 """
 Terminal User Interface (TUI) for Odoo Manager using Textual.
 
-A beautiful, user-friendly interface where most operations are done by selection
-rather than typing. Minimal text input only when necessary.
+A simple menu-driven interface where you select options by number.
 """
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -20,9 +18,6 @@ from textual.widgets import (
     Button,
     Input,
     Label,
-    Log,
-    Switch,
-    Select,
 )
 from textual.binding import Binding
 from textual.screen import ModalScreen
@@ -30,114 +25,46 @@ from textual import on
 
 from odoo_manager.core.instance import InstanceManager
 from odoo_manager.core.monitor import HealthMonitor
-from odoo_manager.config import Config
 
 
 class AppState(str, Enum):
     """Application states."""
-    DASHBOARD = "dashboard"
+    MENU = "menu"
     INSTANCES = "instances"
-    DATABASES = "databases"
-    MODULES = "modules"
-    BACKUPS = "backups"
-    LOGS = "logs"
-    CONFIG = "config"
+    CREATE_INSTANCE = "create_instance"
+    INSTANCE_ACTIONS = "instance_actions"
 
 
-@dataclass
-class InstanceInfo:
-    """Information about an instance."""
-    name: str
-    version: str
-    edition: str
-    status: str
-    running: bool
-    port: int
-    workers: int
-    db_name: str
-    cpu_percent: float = 0.0
-    memory_mb: int = 0
-    memory_percent: float = 0.0
-
-
-class StatCard(Container):
-    """A stat card widget for displaying metrics."""
-
-    def __init__(self, title: str, value_id: str, color: str, **kwargs):
-        super().__init__(classes=f"stat-card stat-{color}", **kwargs)
-        self.title = title
-        self.value_id = value_id
-        self.color = color
+class MainMenu(Container):
+    """Main menu with numbered options."""
 
     def compose(self) -> ComposeResult:
-        """Compose the stat card."""
-        yield Static(self.title, classes="stat-title")
-        yield Static("0", id=self.value_id, classes="stat-value")
+        """Compose the main menu."""
+        yield Static(
+            """[bold cyan]Odoo Manager[/bold cyan] [dim]v0.1.0[/dim]
+
+A local Odoo instance management tool
+
+[bold]Main Menu[/bold]""",
+            id="menu_header"
+        )
+        yield Static(
+            """  [1] [cyan]Instances[/cyan]       Manage Odoo instances
+  [2] [cyan]Databases[/cyan]       Manage databases
+  [3] [cyan]Modules[/cyan]         Install/Update modules
+  [4] [cyan]Backups[/cyan]         Backup & Restore
+  [5] [cyan]Logs[/cyan]            View logs
+  [6] [cyan]Config[/cyan]          Configuration
+  [Q] [dim]Quit[/dim]""",
+            id="menu_options"
+        )
+        yield Static("Enter option (1-6, Q):", id="menu_prompt")
 
 
-class Dashboard(Container):
-    """Main dashboard with stats and quick actions."""
+class InstanceList(Container):
+    """Instance list with numbered options."""
 
-    def on_mount(self) -> None:
-        """Load stats when mounted."""
-        self.update_stats()
-
-    def update_stats(self) -> None:
-        """Update dashboard statistics."""
-        try:
-            import psutil
-
-            manager = InstanceManager()
-            instances = manager.list_instances()
-
-            total = len(instances)
-            running = sum(1 for i in instances if i.is_running())
-            stopped = total - running
-
-            # Update counts
-            self.query_one("#total_instances", Static).update(str(total))
-            self.query_one("#running_instances", Static).update(str(running))
-            self.query_one("#stopped_instances", Static).update(str(stopped))
-
-            # System stats
-            cpu = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory().percent
-
-            cpu_style = "green" if cpu < 70 else "yellow" if cpu < 90 else "red"
-            cpu_label = self.query_one("#system_cpu", Static)
-            cpu_label.update(Text(f"{cpu:.1f}%", style=cpu_style))
-
-            mem_style = "green" if memory < 70 else "yellow" if memory < 90 else "red"
-            mem_label = self.query_one("#system_memory", Static)
-            mem_label.update(Text(f"{memory:.1f}%", style=mem_style))
-
-        except Exception:
-            pass
-
-    def compose(self) -> ComposeResult:
-        """Compose the dashboard."""
-        yield Static("[bold]System Overview[/]", classes="header-text")
-
-        # Stats cards
-        with Vertical(id="stats_container"):
-            with Horizontal(classes="stat-row"):
-                yield StatCard("Instances", "total_instances", "cyan")
-                yield StatCard("Running", "running_instances", "green")
-                yield StatCard("Stopped", "stopped_instances", "red")
-            with Horizontal(classes="stat-row"):
-                yield StatCard("CPU", "system_cpu", "yellow")
-                yield StatCard("Memory", "system_memory", "yellow")
-
-        yield Static("[bold]Quick Actions[/]", classes="header-text")
-        with Horizontal(classes="actions-row"):
-            yield Button("New Instance", id="btn_new_instance", variant="primary")
-            yield Button("Refresh", id="btn_refresh_all")
-
-
-class InstanceTable(Container):
-    """Widget displaying list of instances with actions."""
-
-    instances: list[InstanceInfo] = []
+    instances: list = []
 
     def on_mount(self) -> None:
         """Load instances when mounted."""
@@ -153,525 +80,456 @@ class InstanceTable(Container):
             self.instances = []
             for inst in instances:
                 health = monitor.check_instance(inst)
-                self.instances.append(
-                    InstanceInfo(
-                        name=inst.config.name,
-                        version=inst.config.version,
-                        edition=inst.config.edition,
-                        status=inst.status(),
-                        running=inst.is_running(),
-                        port=inst.config.port,
-                        workers=inst.config.workers,
-                        db_name=inst.config.db_name,
-                        cpu_percent=health.cpu_percent,
-                        memory_mb=health.memory_mb,
-                        memory_percent=health.memory_percent,
-                    )
-                )
+                self.instances.append({
+                    "name": inst.config.name,
+                    "version": inst.config.version,
+                    "status": inst.status(),
+                    "running": inst.is_running(),
+                    "port": inst.config.port,
+                })
         except Exception:
             self.instances = []
 
-        self.update_table()
+        self.update_display()
 
-    def update_table(self) -> None:
-        """Update the table with current data."""
-        table = self.query_one(DataTable)
-        table.clear()
+    def update_display(self) -> None:
+        """Update the display."""
+        content = Static(id="instance_list")
+        self.remove_children()
+        self.mount(content)
 
         if not self.instances:
-            table.add_row(
-                Text("No instances found", style="dim italic"),
-                "", "", "", "", ""
-            )
+            content.update("[yellow]No instances found.[/yellow]\n\n[0] Return to menu")
             return
 
-        for inst in self.instances:
-            status_icon = "[green]ON[/green]" if inst.running else "[red]OFF[/red]"
-            status_text = Text(status_icon, style="default")
+        text = "[bold]Odoo Instances[/bold]\n\n"
+        for i, inst in enumerate(self.instances, 1):
+            status = "[green]RUNNING[/green]" if inst["running"] else "[red]STOPPED[/red]"
+            text += f"  [{i}] {inst['name']:20} {status:15} v{inst['version']} :{inst['port']}\n"
 
-            cpu_style = "green" if inst.cpu_percent < 70 else "yellow" if inst.cpu_percent < 90 else "red"
-            cpu_text = Text(f"{inst.cpu_percent:.1f}%", style=cpu_style)
-
-            mem_style = "green" if inst.memory_percent < 70 else "yellow" if inst.memory_percent < 90 else "red"
-            mem_text = Text(f"{inst.memory_percent:.1f}%", style=mem_style)
-
-            table.add_row(
-                Text(inst.name, style="cyan bold"),
-                status_text,
-                Text(inst.version),
-                Text(str(inst.port)),
-                cpu_text,
-                mem_text,
-            )
+        text += "\n[0] Return to menu"
+        content.update(Text.from_markup(text))
 
     def compose(self) -> ComposeResult:
-        """Compose the instance table."""
-        yield Static("[bold]Odoo Instances[/]", classes="header-text")
-        table = DataTable(id="instance_table")
-        table.add_column("Name", key="name", width=20)
-        table.add_column("Status", key="status", width=15)
-        table.add_column("Version", key="version", width=10)
-        table.add_column("Port", key="port", width=8)
-        table.add_column("CPU", key="cpu", width=10)
-        table.add_column("Memory", key="memory", width=10)
-        table.cursor_type = "row"
-        yield table
-
-        with Horizontal(classes="table-actions"):
-            yield Button("Create New", id="btn_create_instance", variant="primary")
-            yield Button("Refresh", id="btn_refresh_instances")
+        """Compose the instance list."""
+        yield Static(id="instance_list")
 
 
-class CreateInstanceScreen(ModalScreen):
-    """Screen for creating a new instance."""
-
-    DEFAULT_CSS = """
-    CreateInstanceScreen {
-        align: center middle;
-    }
-
-    #create_dialog {
-        width: 60;
-        height: 25;
-        background: $panel;
-        border: thick $primary;
-    }
-
-    .form-row {
-        height: 3;
-        padding: 0 2;
-    }
-
-    .form-label {
-        width: 15;
-        text-align: right;
-        padding: 1 2;
-    }
-
-    .small-input {
-        width: 20;
-    }
-
-    .actions {
-        height: 3;
-        align: center middle;
-    }
-    """
+class CreateInstanceForm(Container):
+    """Form to create a new instance."""
 
     def compose(self) -> ComposeResult:
-        """Compose the create instance form."""
-        with Container(id="create_dialog"):
-            yield Static("[bold]Create New Instance[/]", classes="header-text")
+        """Compose the form."""
+        yield Static(
+            """[bold cyan]Create New Instance[/bold cyan]
 
-            # Instance name
-            with Horizontal(classes="form-row"):
-                yield Label("Name:", classes="form-label")
-                yield Input(placeholder="my-odoo", id="input_name", classes="small-input")
-
-            # Version
-            with Horizontal(classes="form-row"):
-                yield Label("Version:", classes="form-label")
-                yield Select(
-                    [
-                        ("19.0", "19.0"),
-                        ("18.0", "18.0"),
-                        ("17.0", "17.0"),
-                        ("16.0", "16.0"),
-                        ("master", "master"),
-                    ],
-                    id="input_version",
-                    value="19.0",
-                    allow_blank=False,
-                )
-
-            # Edition
-            with Horizontal(classes="form-row"):
-                yield Label("Edition:", classes="form-label")
-                yield Select(
-                    [
-                        ("Community", "community"),
-                        ("Enterprise", "enterprise"),
-                    ],
-                    id="input_edition",
-                    value="community",
-                    allow_blank=False,
-                )
-
-            # Port
-            with Horizontal(classes="form-row"):
-                yield Label("Port:", classes="form-label")
-                yield Select(
-                    [
-                        ("8069 (Default)", "8069"),
-                        ("8070", "8070"),
-                        ("8071", "8071"),
-                        ("8072", "8072"),
-                    ],
-                    id="input_port",
-                    value="8069",
-                    allow_blank=False,
-                )
-
-            # Workers
-            with Horizontal(classes="form-row"):
-                yield Label("Workers:", classes="form-label")
-                yield Select(
-                    [
-                        ("2", "2"),
-                        ("4 (Recommended)", "4"),
-                        ("8", "8"),
-                    ],
-                    id="input_workers",
-                    value="4",
-                    allow_blank=False,
-                )
-
-            with Horizontal(classes="actions"):
-                yield Button("Create", id="btn_do_create", variant="primary")
-                yield Button("Cancel", id="btn_cancel_create")
-
-    @on(Button.Pressed, "#btn_cancel_create")
-    def on_cancel(self) -> None:
-        """Cancel and close dialog."""
-        self.app.pop_screen()
-
-    @on(Button.Pressed, "#btn_do_create")
-    def on_create(self) -> None:
-        """Create the instance."""
-        try:
-            name = self.query_one("#input_name", Input).value.strip()
-            version = self.query_one("#input_version", Select).value
-            edition = self.query_one("#input_edition", Select).value
-            port = int(self.query_one("#input_port", Select).value)
-            workers = int(self.query_one("#input_workers", Select).value)
-
-            if not name:
-                self.app.notify("Please enter an instance name", severity="error")
-                return
-
-            manager = InstanceManager()
-            manager.create_instance(
-                name=name,
-                version=version,
-                edition=edition,
-                port=port,
-                workers=workers,
-                deployment_type="docker",
-            )
-
-            self.app.notify(f"Instance '{name}' created!", severity="information")
-            self.app.pop_screen()
-
-            # Refresh the instance list
-            if hasattr(self.app, "refresh_instances"):
-                self.app.refresh_instances()
-
-        except Exception as e:
-            self.app.notify(f"Failed: {e}", severity="error")
+Step 1: Enter Instance Name
+━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-class ActionDialog(ModalScreen):
-    """Dialog for instance actions."""
+[0] Cancel""",
+            id="create_header"
+        )
+        yield Input(placeholder="Enter instance name...", id="input_name")
 
-    DEFAULT_CSS = """
-    ActionDialog {
-        align: center middle;
-    }
 
-    #action_dialog {
-        width: 50;
-        height: 15;
-        background: $panel;
-        border: thick $primary;
-    }
-    """
+class CreateInstanceStep2(Container):
+    """Step 2: Select version."""
 
-    def __init__(self, title: str, action: str, instance_name: str, **kwargs):
+    instance_name: str = ""
+
+    def __init__(self, name: str, **kwargs):
         super().__init__(**kwargs)
-        self.title = title
-        self.action = action
-        self.instance_name = instance_name
+        self.instance_name = name
 
     def compose(self) -> ComposeResult:
-        """Compose the dialog."""
-        with Container(id="action_dialog"):
-            yield Static(self.title, classes="header-text")
-            yield Static(f"Confirm this action for '{self.instance_name}'?")
-            with Horizontal(classes="actions"):
-                yield Button("Confirm", id="btn_confirm", variant="primary")
-                yield Button("Cancel", id="btn_cancel", variant="default")
+        """Compose the form."""
+        yield Static(
+            f"""[bold cyan]Create New Instance[/bold cyan]
 
-    @on(Button.Pressed, "#btn_cancel")
-    def on_cancel(self) -> None:
-        """Cancel dialog."""
-        self.app.pop_screen()
+Step 2: Select Version for '[cyan]{self.instance_name}[/cyan]'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @on(Button.Pressed, "#btn_confirm")
-    def on_confirm(self) -> None:
-        """Execute the action."""
-        try:
-            manager = InstanceManager()
-            instance = manager.get_instance(self.instance_name)
 
-            if self.action == "start":
-                instance.start()
-                self.app.notify(f"Started '{self.instance_name}'")
-            elif self.action == "stop":
-                instance.stop()
-                self.app.notify(f"Stopped '{self.instance_name}'")
-            elif self.action == "restart":
-                instance.restart()
-                self.app.notify(f"Restarted '{self.instance_name}'")
-            elif self.action == "remove":
-                instance.remove()
-                manager.remove_instance(self.instance_name)
-                self.app.notify(f"Removed '{self.instance_name}'")
+  [1] [cyan]19.0[/cyan]           (Latest stable)
+  [2] [cyan]18.0[/cyan]           (Previous stable)
+  [3] [cyan]17.0[/cyan]           (Previous stable)
+  [4] [cyan]master[/cyan]         (Development)
 
-            self.app.pop_screen()
+[0] Cancel"""
+        )
 
-            if hasattr(self.app, "refresh_instances"):
-                self.app.refresh_instances()
 
-        except Exception as e:
-            self.app.notify(f"Action failed: {e}", severity="error")
+class CreateInstanceStep3(Container):
+    """Step 3: Select edition."""
+
+    instance_name: str = ""
+    version: str = ""
+
+    def __init__(self, name: str, version: str, **kwargs):
+        super().__init__(**kwargs)
+        self.instance_name = name
+        self.version = version
+
+    def compose(self) -> ComposeResult:
+        """Compose the form."""
+        yield Static(
+            f"""[bold cyan]Create New Instance[/bold cyan]
+
+Step 3: Select Edition for '[cyan]{self.instance_name}[/cyan]'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+  [1] [cyan]Community[/cyan]     (Free, open source)
+  [2] [cyan]Enterprise[/cyan]    (Paid, with extra features)
+
+[0] Cancel"""
+        )
+
+
+class CreateInstanceConfirm(Container):
+    """Confirm and create instance."""
+
+    instance_name: str = ""
+    version: str = ""
+    edition: str = ""
+
+    def __init__(self, name: str, version: str, edition: str, **kwargs):
+        super().__init__(**kwargs)
+        self.instance_name = name
+        self.version = version
+        self.edition = edition
+
+    def compose(self) -> ComposeResult:
+        """Compose the confirmation."""
+        yield Static(
+            f"""[bold cyan]Create New Instance[/bold cyan]
+
+Step 4: Confirm
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Name:     [cyan]{self.instance_name}[/cyan]
+  Version:  [cyan]{self.version}[/cyan]
+  Edition:  [cyan]{self.edition}[/cyan]
+  Port:     [cyan]8069[/cyan] (default)
+  Workers:  [cyan]4[/cyan] (default)
+
+
+  [1] [green]Create Instance[/green]
+  [0] Cancel"""
+        )
+
+
+class InstanceActions(Container):
+    """Actions for a specific instance."""
+
+    instance_name: str = ""
+    instance_info: dict = {}
+
+    def __init__(self, instance_info: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.instance_name = instance_info["name"]
+        self.instance_info = instance_info
+
+    def compose(self) -> ComposeResult:
+        """Compose the actions."""
+        status_color = "green" if self.instance_info["running"] else "red"
+        yield Static(
+            f"""[bold cyan]Instance: {self.instance_name}[/bold cyan]
+
+  Status:   [{status_color}]{self.instance_info['status'].upper()}[/{status_color}]
+  Version:  {self.instance_info['version']}
+  Port:     :{self.instance_info['port']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [1] [green]Start[/green]         Start the instance
+  [2] [red]Stop[/red]            Stop the instance
+  [3] [yellow]Restart[/yellow]       Restart the instance
+  [4] [cyan]Logs[/cyan]            View logs
+  [5] [red]Remove[/red]           Delete instance
+
+[0] Back to instances"""
+        )
 
 
 class OdooManagerTUI(App):
-    """Main TUI application for Odoo Manager."""
+    """Main TUI application - simple numbered menu."""
 
     CSS = """
     Screen {
         background: $background;
     }
 
-    #nav_sidebar {
-        width: 28;
-        background: $surface;
-        dock: left;
+    #main_container {
+        padding: 2 4;
     }
 
-    #main_content {
-        height: 1fr;
-    }
-
-    .header-text {
-        text-style: bold;
-        text-align: center;
-        padding: 1 0;
-        border-bottom: solid $primary;
-        margin-bottom: 1;
-    }
-
-    #stats_container {
-        height: 12;
+    Static {
         margin: 1 0;
     }
 
-    .stat-row {
-        height: 6;
-    }
-
-    .stat-card {
-        width: 1fr;
-        height: 1fr;
-        background: $panel;
-        border: round $primary;
-        padding: 1;
-        margin: 0 1;
-        content-align: center middle;
-    }
-
-    .stat-card.stat-cyan {
-        border: round cyan;
-    }
-
-    .stat-card.stat-green {
-        border: round green;
-    }
-
-    .stat-card.stat-red {
-        border: round red;
-    }
-
-    .stat-card.stat-yellow {
-        border: round yellow;
-    }
-
-    .stat-title {
-        text-style: bold dim;
-        margin-bottom: 1;
-    }
-
-    .stat-value {
-        text-style: bold;
-    }
-
-    .actions-row {
-        height: 3;
-        align: center middle;
-        padding: 1 0;
-    }
-
-    .table-actions {
-        height: 3;
-        align: center middle;
-        padding: 1 0;
-    }
-
-    Button {
-        margin: 0 1;
-    }
-
-    DataTable {
-        height: 1fr;
+    Input {
+        margin: 1 0;
+        width: 40;
     }
     """
 
     TITLE = "Odoo Manager"
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
-        Binding("r", "refresh", "Refresh", show=True),
-        Binding("n", "new_instance", "New", show=True),
-        Binding("tab", "focus_next", "Next", show=False),
-        Binding("shift+tab", "focus_previous", "Previous", show=False),
-        Binding("up", "focus_previous", "Up", show=False),
-        Binding("down", "focus_next", "Down", show=False),
+        Binding("0", "back", "Back", show=True),
     ]
 
-    current_state: AppState = AppState.DASHBOARD
+    # State
+    current_state: AppState = AppState.MENU
+    create_data: dict = {}
 
     def compose(self) -> ComposeResult:
         """Compose the application."""
         yield Header()
-
-        # Navigation sidebar
-        with Vertical(id="nav_sidebar"):
-            yield Static("[bold]Navigation[/]", classes="header-text")
-            yield Button("Dashboard", id="nav_dashboard", variant="primary")
-            yield Button("Instances", id="nav_instances")
-            yield Button("Databases", id="nav_databases")
-            yield Button("Modules", id="nav_modules")
-            yield Button("Backups", id="nav_backups")
-            yield Button("Logs", id="nav_logs")
-            yield Button("Config", id="nav_config")
-
-        # Main content
-        yield Container(id="main_content")
-
+        yield Container(id="main_container")
         yield Footer()
 
     def on_mount(self) -> None:
         """Initialize on mount."""
-        self.show_dashboard()
+        self.show_main_menu()
 
-    # Navigation button handlers
-    @on(Button.Pressed, "#nav_dashboard")
-    def show_dashboard(self) -> None:
-        """Show dashboard view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        # Don't set an ID to avoid duplicates
-        dashboard = Dashboard()
-        main_content.mount(dashboard)
-        self.current_state = AppState.DASHBOARD
-        self._update_nav_highlight("nav_dashboard")
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle input submission."""
+        if self.current_state == AppState.CREATE_INSTANCE:
+            name = event.value.strip()
+            if name:
+                self.create_data["name"] = name
+                self.show_create_step2(name)
+            else:
+                self.show_main_menu()
 
-    @on(Button.Pressed, "#nav_instances")
+    def on_key(self, event) -> None:
+        """Handle key presses for menu navigation."""
+        if event.key == "q" or event.key == "Q":
+            self.exit()
+        elif event.character and event.character.isdigit():
+            self.handle_menu_input(int(event.character))
+
+    def handle_menu_input(self, choice: int) -> None:
+        """Handle menu number input."""
+        if self.current_state == AppState.MENU:
+            if choice == 1:
+                self.show_instances()
+            elif choice == 2:
+                self.show_message("Databases", "Coming soon...")
+            elif choice == 3:
+                self.show_message("Modules", "Coming soon...")
+            elif choice == 4:
+                self.show_message("Backups", "Coming soon...")
+            elif choice == 5:
+                self.show_message("Logs", "Coming soon...")
+            elif choice == 6:
+                self.show_message("Config", "Coming soon...")
+
+        elif self.current_state == AppState.INSTANCES:
+            if choice == 0:
+                self.show_main_menu()
+            elif 1 <= choice <= len(self.query_one(InstanceList).instances):
+                inst = self.query_one(InstanceList).instances[choice - 1]
+                self.show_instance_actions(inst)
+
+        elif self.current_state == AppState.INSTANCE_ACTIONS:
+            if choice == 0:
+                self.show_instances()
+            elif choice == 1:  # Start
+                self._instance_action("start")
+            elif choice == 2:  # Stop
+                self._instance_action("stop")
+            elif choice == 3:  # Restart
+                self._instance_action("restart")
+            elif choice == 4:  # Logs
+                self.show_message("Logs", f"Logs for {self.create_data.get('instance_name', 'N/A')}...\n\nComing soon...")
+                self.show_instances()
+            elif choice == 5:  # Remove
+                self._instance_action("remove")
+
+        elif self.current_state == AppState.CREATE_INSTANCE:
+            if choice == 0:
+                self.show_instances()
+
+    def show_main_menu(self) -> None:
+        """Show main menu."""
+        self.current_state = AppState.MENU
+        self.create_data = {}
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(MainMenu())
+
     def show_instances(self) -> None:
-        """Show instances view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        instance_table = InstanceTable()
-        main_content.mount(instance_table)
+        """Show instances list."""
         self.current_state = AppState.INSTANCES
-        self._update_nav_highlight("nav_instances")
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(InstanceList())
 
-    @on(Button.Pressed, "#nav_databases")
-    def show_databases(self) -> None:
-        """Show databases view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        main_content.mount(Static("[bold]Database Management[/]\n\nComing soon..."))
-        self.current_state = AppState.DATABASES
-        self._update_nav_highlight("nav_databases")
+    def show_create_step1(self) -> None:
+        """Show create instance step 1 - enter name."""
+        self.current_state = AppState.CREATE_INSTANCE
+        self.create_data = {}
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(CreateInstanceForm())
+        # Focus on input
+        input_widget = self.query_one(Input)
+        input_widget.focus()
 
-    @on(Button.Pressed, "#nav_modules")
-    def show_modules(self) -> None:
-        """Show modules view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        main_content.mount(Static("[bold]Module Management[/]\n\nComing soon..."))
-        self.current_state = AppState.MODULES
-        self._update_nav_highlight("nav_modules")
+    def show_create_step2(self, name: str) -> None:
+        """Show create instance step 2 - select version."""
+        self.create_data["name"] = name
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(CreateInstanceStep2(name))
 
-    @on(Button.Pressed, "#nav_backups")
-    def show_backups(self) -> None:
-        """Show backups view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        main_content.mount(Static("[bold]Backup Management[/]\n\nComing soon..."))
-        self.current_state = AppState.BACKUPS
-        self._update_nav_highlight("nav_backups")
+    def show_create_step3(self, name: str, version: str) -> None:
+        """Show create instance step 3 - select edition."""
+        self.create_data["name"] = name
+        self.create_data["version"] = version
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(CreateInstanceStep3(name, version))
 
-    @on(Button.Pressed, "#nav_logs")
-    def show_logs(self) -> None:
-        """Show logs view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        main_content.mount(Static("[bold]Log Viewer[/]\n\nComing soon..."))
-        self.current_state = AppState.LOGS
-        self._update_nav_highlight("nav_logs")
+    def show_create_confirm(self, name: str, version: str, edition: str) -> None:
+        """Show create instance confirmation."""
+        self.create_data["name"] = name
+        self.create_data["version"] = version
+        self.create_data["edition"] = edition
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(CreateInstanceConfirm(name, version, edition))
 
-    @on(Button.Pressed, "#nav_config")
-    def show_config(self) -> None:
-        """Show config view."""
-        main_content = self.query_one("#main_content", Container)
-        main_content.remove_children()
-        main_content.mount(Static("[bold]Configuration[/]\n\nComing soon..."))
-        self.current_state = AppState.CONFIG
-        self._update_nav_highlight("nav_config")
+    def show_instance_actions(self, instance: dict) -> None:
+        """Show actions for an instance."""
+        self.current_state = AppState.INSTANCE_ACTIONS
+        self.create_data["instance_name"] = instance["name"]
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(InstanceActions(instance))
 
-    # Action button handlers
-    @on(Button.Pressed, "#btn_new_instance")
-    @on(Button.Pressed, "#btn_create_instance")
-    def action_new_instance(self) -> None:
-        """Show create instance dialog."""
-        self.push_screen(CreateInstanceScreen())
+    def show_message(self, title: str, message: str) -> None:
+        """Show a simple message."""
+        main = self.query_one("#main_container", Container)
+        main.remove_children()
+        main.mount(
+            Static(
+                f"[bold cyan]{title}[/bold cyan]\n\n{message}\n\n[0] OK"
+            )
+        )
 
-    @on(Button.Pressed, "#btn_refresh_all")
-    @on(Button.Pressed, "#btn_refresh_instances")
-    def refresh_instances(self) -> None:
-        """Refresh instances."""
-        if self.current_state == AppState.INSTANCES:
-            try:
-                instances = self.query_one(InstanceTable)
-                instances.refresh_instances()
-            except:
-                pass
-        elif self.current_state == AppState.DASHBOARD:
-            try:
-                dashboard = self.query_one(Dashboard)
-                dashboard.update_stats()
-            except:
-                pass
+    def _instance_action(self, action: str) -> None:
+        """Perform an instance action."""
+        name = self.create_data.get("instance_name")
+        try:
+            manager = InstanceManager()
+            instance = manager.get_instance(name)
 
-    def action_refresh(self) -> None:
-        """Refresh current view (for binding)."""
-        self.refresh_instances()
+            if action == "start":
+                instance.start()
+                self.notify(f"Started '{name}'")
+            elif action == "stop":
+                instance.stop()
+                self.notify(f"Stopped '{name}'")
+            elif action == "restart":
+                instance.restart()
+                self.notify(f"Restarted '{name}'")
+            elif action == "remove":
+                instance.remove()
+                manager.remove_instance(name)
+                self.notify(f"Removed '{name}'")
 
-    def _update_nav_highlight(self, selected_id: str) -> None:
-        """Update navigation button highlights."""
-        nav_ids = ["nav_dashboard", "nav_instances", "nav_databases",
-                   "nav_modules", "nav_backups", "nav_logs", "nav_config"]
-        for nav_id in nav_ids:
-            try:
-                btn = self.query_one(f"#{nav_id}", Button)
-                if nav_id == selected_id:
-                    btn.variant = "primary"
-                else:
-                    btn.variant = "default"
-            except:
-                pass
+            self.show_instances()
+
+        except Exception as e:
+            self.show_message("Error", f"Action failed: {e}")
+            if action != "remove":
+                self.show_instances()
+
+    # Handlers for create instance screens
+    def on_key_create_step2(self, choice: int) -> None:
+        """Handle step 2 input."""
+        name = self.create_data.get("name", "")
+        versions = ["19.0", "18.0", "17.0", "master"]
+        if choice == 0:
+            self.show_instances()
+        elif 1 <= choice <= len(versions):
+            self.show_create_step3(name, versions[choice - 1])
+
+    def on_key_create_step3(self, choice: int) -> None:
+        """Handle step 3 input."""
+        name = self.create_data.get("name", "")
+        version = self.create_data.get("version", "")
+        editions = ["community", "enterprise"]
+        if choice == 0:
+            self.show_instances()
+        elif choice == 1:
+            self.show_create_confirm(name, version, "Community")
+        elif choice == 2:
+            self.show_create_confirm(name, version, "Enterprise")
+
+    def on_key_create_confirm(self, choice: int) -> None:
+        """Handle confirm input."""
+        if choice == 0:
+            self.show_instances()
+        elif choice == 1:
+            self._do_create_instance()
+
+    def _do_create_instance(self) -> None:
+        """Actually create the instance."""
+        try:
+            manager = InstanceManager()
+            manager.create_instance(
+                name=self.create_data["name"],
+                version=self.create_data["version"],
+                edition=self.create_data["edition"].lower(),
+                port=8069,
+                workers=4,
+                deployment_type="docker",
+            )
+            self.show_message("Success", f"Instance '{self.create_data['name']}' created successfully!")
+            self.show_instances()
+        except Exception as e:
+            self.show_message("Error", f"Failed to create instance: {e}")
+
+    # Override on_key to route to specific handlers
+    def on_key(self, event) -> None:
+        """Handle key presses with routing to current state handler."""
+        if event.key == "q" or event.key == "Q":
+            self.exit()
+            return
+
+        if not event.character or not event.character.isdigit():
+            return
+
+        choice = int(event.character)
+
+        if choice == 0:
+            if self.current_state in [AppState.CREATE_INSTANCE, AppState.INSTANCE_ACTIONS]:
+                self.show_instances()
+            else:
+                self.show_main_menu()
+            return
+
+        if self.current_state == AppState.MENU:
+            self.handle_menu_input(choice)
+        elif self.current_state == AppState.INSTANCES:
+            self.handle_menu_input(choice)
+        elif self.current_state == AppState.INSTANCE_ACTIONS:
+            self.handle_menu_input(choice)
+        elif self.current_state == AppState.CREATE_INSTANCE:
+            # Check which step we're on
+            main = self.query_one("#main_container", Container)
+            if isinstance(main.children[0], CreateInstanceStep2):
+                self.on_key_create_step2(choice)
+            elif isinstance(main.children[0], CreateInstanceStep3):
+                self.on_key_create_step3(choice)
+            elif isinstance(main.children[0], CreateInstanceConfirm):
+                self.on_key_create_confirm(choice)
 
 
 def launch_tui():
