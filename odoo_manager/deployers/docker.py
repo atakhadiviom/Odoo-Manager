@@ -189,6 +189,9 @@ class DockerDeployer(BaseDeployer):
         if not self.compose_file.exists():
             return
 
+        # Refresh compose command to ensure sudo is used
+        self.compose_cmd = get_docker_compose_command()
+
         cmd = self.compose_cmd + ["-f", str(self.compose_file), "stop"]
         result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -201,6 +204,9 @@ class DockerDeployer(BaseDeployer):
 
         if not self.compose_file.exists():
             return
+
+        # Refresh compose command to ensure sudo is used
+        self.compose_cmd = get_docker_compose_command()
 
         cmd = self.compose_cmd + ["-f", str(self.compose_file), "restart"]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -256,6 +262,9 @@ class DockerDeployer(BaseDeployer):
         """Remove the instance deployment."""
         if not self.compose_file.exists():
             return
+
+        # Refresh compose command to ensure sudo is used
+        self.compose_cmd = get_docker_compose_command()
 
         # Stop and remove containers
         cmd = self.compose_cmd + ["-f", str(self.compose_file), "down", "-v"]
