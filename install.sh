@@ -72,7 +72,13 @@ mkdir -p "$INSTALL_DIR"
 echo "Downloading from GitHub..."
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Updating existing installation..."
-    cd "$INSTALL_DIR" && git pull
+    cd "$INSTALL_DIR"
+    # Fetch latest and reset to ensure clean update
+    git fetch origin && git reset --hard origin/main && git clean -fd
+    # Clear Python cache
+    find "$INSTALL_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$INSTALL_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
+    echo "✓ Updated to latest version"
 else
     rm -rf "$INSTALL_DIR" 2>/dev/null || true
     git clone https://github.com/atakhadiviom/Odoo-Manager.git "$INSTALL_DIR" || {
