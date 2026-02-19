@@ -74,7 +74,7 @@ class DockerDeployer(BaseDeployer):
         }
 
     @property
-    def docker_client):
+    def docker_client(self):
         """Lazy load Docker client."""
         if self._docker_client is None:
             try:
