@@ -2,6 +2,9 @@
 Base class for deployment strategies.
 """
 
+import os
+import stat
+import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -59,5 +62,37 @@ class BaseDeployer(ABC):
         return self.data_dir
 
     def ensure_data_dir(self) -> None:
-        """Ensure the instance data directory exists."""
+        """Ensure the instance data directory exists and is writable."""
+        # If directory exists but is not writable, fix permissions
+        if self.data_dir.exists():
+            if not os.access(self.data_dir, os.W_OK):
+                # Directory exists but we can't write to it - fix ownership
+                try:
+                    user = os.environ.get("USER", os.environ.get("USERNAME", "ubuntu"))
+                    subprocess.run(
+                        ["sudo", "chown", "-R", f"{user}:{user}", str(self.data_dir)],
+                        check=True,
+                        capture_output=True
+                    )
+                except subprocess.CalledProcessError:
+                    pass  # Will fail on write, let the caller handle it
+        else:
+            # Create parent directories first
+            parent = self.data_dir.parent
+            if not parent.exists():
+                parent.mkdir(parents=True, exist_ok=True)
+
+            # Check if parent is writable
+            if not os.access(parent, os.W_OK):
+                # Parent exists but not writable - fix ownership
+                try:
+                    user = os.environ.get("USER", os.environ.get("USERNAME", "ubuntu"))
+                    subprocess.run(
+                        ["sudo", "chown", "-R", f"{user}:{user}", str(parent)],
+                        check=True,
+                        capture_output=True
+                    )
+                except subprocess.CalledProcessError:
+                    pass
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
