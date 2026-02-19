@@ -183,11 +183,8 @@ fi
 
 if [ "$SYMLINK_OK" = true ]; then
     echo "✓ Created system-wide symlinks in /usr/local/bin"
-    ODOO_CMD="$USER_BIN/odoo-manager"
 else
     echo "⚠️  Could not create symlinks in /usr/local/bin"
-    echo "   Using full path to command..."
-    ODOO_CMD="$USER_BIN/odoo-manager"
 
     # Add to .bashrc for future sessions
     if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
@@ -197,6 +194,9 @@ else
         echo "✓ Added $USER_BIN to ~/.bashrc for future sessions"
     fi
 fi
+
+# Always use the local bin path directly to ensure latest version runs
+ODOO_CMD="$USER_BIN/odoo-manager"
 
 echo ""
 echo "=========================================="
