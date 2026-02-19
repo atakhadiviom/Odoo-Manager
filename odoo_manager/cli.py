@@ -89,9 +89,8 @@ def show_interactive_menu():
             # Launch TUI
             console.print("[dim]Launching Terminal UI...[/dim]\n")
             try:
-                from odoo_manager.tui.app import OdooManagerApp
-                app = OdooManagerApp()
-                app.run()
+                from odoo_manager.tui.app import launch_tui
+                launch_tui()
             except ImportError:
                 console.print("[yellow]TUI not available. Please install textual:[/yellow]")
                 console.print("  pip install --break-system-packages textual")
