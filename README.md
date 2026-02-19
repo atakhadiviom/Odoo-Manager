@@ -26,7 +26,13 @@ A local Odoo instance management tool similar to [odoo.sh](https://www.odoo.sh) 
 ### Quick Install (One-line)
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)
+curl -o /tmp/install.sh https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh && bash /tmp/install.sh
+```
+
+Or if curl caching is an issue:
+
+```bash
+bash <(curl -s -H "Cache-Control: no-cache" https://raw.githubusercontent.com/atakhadiviom/Odoo-Manager/main/install.sh)
 ```
 
 ### From source
