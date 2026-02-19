@@ -1,630 +1,294 @@
 """
-Terminal User Interface (TUI) for Odoo Manager using Textual.
+Terminal UI for Odoo Manager - Simple numbered menu like a bash script.
 
-A simple menu-driven interface where you select options by number.
+No complex framework - just simple input/output.
 """
 
-from enum import Enum
+import sys
 from typing import Optional
 
+from rich.console import Console
+from rich.panel import Panel
 from rich.text import Text
-from textual.app import App, ComposeResult
-from textual.containers import Container
-from textual.widgets import (
-    Header,
-    Footer,
-    Static,
-    Input,
-)
-from textual.binding import Binding
-from textual import on
 
 from odoo_manager.core.instance import InstanceManager
 from odoo_manager.core.monitor import HealthMonitor
 
 
-class AppState(str, Enum):
-    """Application states."""
-    MENU = "menu"
-    INSTANCES = "instances"
-    CREATE_STEP_NAME = "create_name"
-    CREATE_STEP_VERSION = "create_version"
-    CREATE_STEP_EDITION = "create_edition"
-    CREATE_STEP_CONFIRM = "create_confirm"
-    INSTANCE_ACTIONS = "instance_actions"
+console = Console()
 
 
-class MainMenu(Container):
-    """Main menu with numbered options."""
+class SimpleTUI:
+    """Simple TUI with numbered menus."""
 
-    def compose(self) -> ComposeResult:
-        """Compose the main menu."""
-        yield Static(
-            """[bold cyan]Odoo Manager[/bold cyan] [dim]v0.1.0[/dim]
+    def __init__(self):
+        self.running = True
+
+    def run(self):
+        """Run the TUI."""
+        console.clear()
+        self.show_main_menu()
+
+    def show_main_menu(self):
+        """Show main menu."""
+        while self.running:
+            console.clear()
+            console.print(
+                Panel(
+                    """[bold cyan]Odoo Manager[/bold cyan] [dim]v0.1.0[/dim]
 
 A local Odoo instance management tool
 
 [bold]Main Menu[/bold]
 
-  [1] [cyan]Instances[/cyan]       Manage Odoo instances
-  [2] [cyan]Databases[/cyan]       Manage databases
-  [3] [cyan]Modules[/cyan]         Install/Update modules
-  [4] [cyan]Backups[/cyan]         Backup & Restore
-  [5] [cyan]Logs[/cyan]            View logs
-  [6] [cyan]Config[/cyan]          Configuration
+  [1]  Instances       Manage Odoo instances
+  [2]  Databases       Manage databases
+  [3]  Modules         Install/Update modules
+  [4]  Backups         Backup & Restore
+  [5]  Logs            View logs
+  [6]  Config          Configuration
 
-  [Q] [dim]Quit[/dim]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press a number (1-6) or Q to quit"""
-        )
-
-
-class InstanceList(Container):
-    """Instance list with numbered options."""
-
-    instances: list = []
-    content: Static = None
-
-    def on_mount(self) -> None:
-        """Load instances when mounted."""
-        self.refresh_instances()
-
-    def refresh_instances(self) -> None:
-        """Refresh the instance list."""
-        try:
-            manager = InstanceManager()
-            instances = manager.list_instances()
-            monitor = HealthMonitor()
-
-            self.instances = []
-            for inst in instances:
-                health = monitor.check_instance(inst)
-                self.instances.append({
-                    "name": inst.config.name,
-                    "version": inst.config.version,
-                    "status": inst.status(),
-                    "running": inst.is_running(),
-                    "port": inst.config.port,
-                })
-        except Exception:
-            self.instances = []
-
-        self.update_display()
-
-    def update_display(self) -> None:
-        """Update the display."""
-        if self.content is None:
-            self.content = Static()
-            self.mount(self.content)
-
-        if not self.instances:
-            self.content.update(
-                """[bold cyan]Odoo Instances[/bold cyan]
-
-[yellow]No instances found.[/yellow]
-
-  [1] [green]Create New Instance[/green]
-  [0] Back to main menu
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press a number to select"""
+  [0]  [dim]Quit[/dim]""",
+                    title="📦 Odoo Manager",
+                    border_style="cyan"
+                )
             )
-            return
 
-        text = "[bold cyan]Odoo Instances[/bold cyan]\n\n"
-        for i, inst in enumerate(self.instances, 1):
-            status = "[green]RUNNING[/green]" if inst["running"] else "[red]STOPPED[/red]"
-            text += f"  [{i}] {inst['name']:20} {status:15} v{inst['version']:6} :{inst['port']}\n"
+            choice = input("\nSelect option (0-6): ").strip()
 
-        text += "\n  [C] [green]Create New Instance[/green]"
-        text += "\n  [0] Back to main menu"
-
-        text += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        text += "\n\nPress a number (1-{}) or 0 to go back".format(len(self.instances))
-
-        self.content.update(Text.from_markup(text))
-
-
-class CreateNameStep(Container):
-    """Step 1: Enter instance name."""
-
-    content: Static = None
-    name_input: Input = None
-
-    def compose(self) -> ComposeResult:
-        """Compose the form."""
-        self.content = Static(
-            """[bold cyan]Create New Instance[/bold cyan]
-
-Step 1: Enter Instance Name
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  [0] Cancel
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-        )
-        yield self.content
-        self.name_input = Input(placeholder="Enter instance name...")
-        yield self.name_input
-
-    def on_mount(self) -> None:
-        """Focus input on mount."""
-        self.name_input.focus()
-
-
-class CreateVersionStep(Container):
-    """Step 2: Select version."""
-
-    content: Static = None
-
-    def __init__(self, name: str, **kwargs):
-        super().__init__(**kwargs)
-        self.instance_name = name
-
-    def compose(self) -> ComposeResult:
-        """Compose the form."""
-        self.content = Static(
-            f"""[bold cyan]Create New Instance[/bold cyan]
-
-Step 2: Select Version for '[cyan]{self.instance_name}[/cyan]'
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  [1] [cyan]19.0[/cyan]           (Latest stable)
-  [2] [cyan]18.0[/cyan]           (Previous stable)
-  [3] [cyan]17.0[/cyan]           (Previous stable)
-  [4] [cyan]master[/cyan]         (Development)
-
-  [0] Cancel
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press a number (1-4) to select version"""
-        )
-        yield self.content
-
-
-class CreateEditionStep(Container):
-    """Step 3: Select edition."""
-
-    content: Static = None
-
-    def __init__(self, name: str, version: str, **kwargs):
-        super().__init__(**kwargs)
-        self.instance_name = name
-        self.version = version
-
-    def compose(self) -> ComposeResult:
-        """Compose the form."""
-        self.content = Static(
-            f"""[bold cyan]Create New Instance[/bold cyan]
-
-Step 3: Select Edition for '[cyan]{self.instance_name}[/cyan]'
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  [1] [cyan]Community[/cyan]     (Free, open source)
-  [2] [cyan]Enterprise[/cyan]    (Paid, with extra features)
-
-  [0] Cancel
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press a number (1-2) to select edition"""
-        )
-        yield self.content
-
-
-class CreateConfirmStep(Container):
-    """Step 4: Confirm and create."""
-
-    content: Static = None
-
-    def __init__(self, name: str, version: str, edition: str, **kwargs):
-        super().__init__(**kwargs)
-        self.instance_name = name
-        self.version = version
-        self.edition = edition
-
-    def compose(self) -> ComposeResult:
-        """Compose the confirmation."""
-        self.content = Static(
-            f"""[bold cyan]Create New Instance[/bold cyan]
-
-Step 4: Confirm
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Name:     [cyan]{self.instance_name}[/cyan]
-  Version:  [cyan]{self.version}[/cyan]
-  Edition:  [cyan]{self.edition}[/cyan]
-  Port:     [cyan]8069[/cyan] (default)
-  Workers:  [cyan]4[/cyan] (default)
-
-  [1] [green]Create Instance[/green]
-  [0] Cancel
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press 1 to create or 0 to cancel"""
-        )
-        yield self.content
-
-
-class InstanceActions(Container):
-    """Actions for a specific instance."""
-
-    content: Static = None
-
-    def __init__(self, instance_info: dict, **kwargs):
-        super().__init__(**kwargs)
-        self.instance_name = instance_info["name"]
-        self.instance_info = instance_info
-
-    def compose(self) -> ComposeResult:
-        """Compose the actions."""
-        status_color = "green" if self.instance_info["running"] else "red"
-        self.content = Static(
-            f"""[bold cyan]Instance: {self.instance_name}[/bold cyan]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Status:   [{status_color}]{self.instance_info['status'].upper()}[/{status_color}]
-  Version:  {self.instance_info['version']}
-  Port:     :{self.instance_info['port']}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  [1] [green]Start[/green]         Start the instance
-  [2] [red]Stop[/red]            Stop the instance
-  [3] [yellow]Restart[/yellow]       Restart the instance
-  [4] [cyan]Logs[/cyan]            View logs
-  [5] [red]Remove[/red]           Delete instance
-
-  [0] Back to instances
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press a number (1-5) or 0 to go back"""
-        )
-        yield self.content
-
-
-class OdooManagerTUI(App):
-    """Main TUI application - simple numbered menu."""
-
-    CSS = """
-    Screen {
-        background: $background;
-    }
-
-    #main_container {
-        padding: 2 4;
-    }
-
-    Static {
-        margin: 1 0;
-    }
-
-    Input {
-        margin: 1 0;
-        width: 40;
-    }
-    """
-
-    TITLE = "Odoo Manager"
-    BINDINGS = [
-        Binding("q", "quit", "Quit", show=True),
-    ]
-
-    # State
-    current_state: AppState = AppState.MENU
-    create_data: dict = {}
-
-    def compose(self) -> ComposeResult:
-        """Compose the application."""
-        yield Header()
-        yield Container(id="main_container")
-        yield Footer()
-
-    def on_mount(self) -> None:
-        """Initialize on mount."""
-        self.show_main_menu()
-
-    @on(Input.Submitted)
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle input submission (for instance name)."""
-        if self.current_state == AppState.CREATE_STEP_NAME:
-            name = event.value.strip()
-            if name:
-                self.create_data["name"] = name
-                self.show_create_version(name)
-            else:
+            if choice == "0" or choice.lower() == "q":
+                console.print("[yellow]Goodbye![/yellow]")
+                self.running = False
+                return
+            elif choice == "1":
                 self.show_instances()
-
-    def on_key(self, event) -> None:
-        """Handle key presses for menu navigation."""
-        # Quit
-        if event.key == "q" or event.key == "Q":
-            self.exit()
-            return
-
-        # Handle digit input
-        if event.character and event.character.isdigit():
-            self.handle_number_input(int(event.character))
-            return
-
-        # Handle 'c' for create from instances screen
-        if event.key == "c" or event.key == "C":
-            if self.current_state == AppState.INSTANCES:
-                self.show_create_name()
-            return
-
-        # Handle '0' for back
-        if event.key == "0":
-            self.handle_back()
-
-    def handle_number_input(self, choice: int) -> None:
-        """Handle number key input."""
-        if self.current_state == AppState.MENU:
-            if choice == 1:
-                self.show_instances()
-            elif choice == 2:
+            elif choice == "2":
                 self.show_placeholder("Databases")
-            elif choice == 3:
+            elif choice == "3":
                 self.show_placeholder("Modules")
-            elif choice == 4:
+            elif choice == "4":
                 self.show_placeholder("Backups")
-            elif choice == 5:
+            elif choice == "5":
                 self.show_placeholder("Logs")
-            elif choice == 6:
+            elif choice == "6":
                 self.show_placeholder("Config")
 
-        elif self.current_state == AppState.INSTANCES:
-            if 1 <= choice <= len(self.get_instance_list().instances):
-                inst = self.get_instance_list().instances[choice - 1]
+    def show_instances(self):
+        """Show instances menu."""
+        while True:
+            # Get instances
+            try:
+                manager = InstanceManager()
+                instances = manager.list_instances()
+                monitor = HealthMonitor()
+
+                instance_list = []
+                for inst in instances:
+                    health = monitor.check_instance(inst)
+                    instance_list.append({
+                        "name": inst.config.name,
+                        "version": inst.config.version,
+                        "status": inst.status(),
+                        "running": inst.is_running(),
+                        "port": inst.config.port,
+                    })
+            except:
+                instance_list = []
+
+            console.clear()
+
+            # Build menu
+            menu_text = "[bold cyan]Odoo Instances[/bold cyan]\n\n"
+
+            if not instance_list:
+                menu_text += "[yellow]No instances found.[/yellow]\n"
+            else:
+                for i, inst in enumerate(instance_list, 1):
+                    status = "[green]RUNNING[/green]" if inst["running"] else "[red]STOPPED[/red]"
+                    menu_text += f"  [{i}]  {inst['name']:20} {status:15} v{inst['version']} :{inst['port']}\n"
+
+            menu_text += "\n  [C]  Create New Instance"
+            menu_text += "\n  [0]  Back to main menu"
+
+            console.print(Panel(menu_text, border_style="cyan"))
+
+            choice = input("\nSelect option: ").strip().lower()
+
+            if choice == "0":
+                return
+            elif choice == "c":
+                self.create_instance()
+            elif choice.isdigit() and 1 <= int(choice) <= len(instance_list):
+                inst = instance_list[int(choice) - 1]
                 self.show_instance_actions(inst)
 
-        elif self.current_state == AppState.CREATE_STEP_VERSION:
-            versions = ["19.0", "18.0", "17.0", "master"]
-            if 1 <= choice <= len(versions):
-                self.show_create_edition(self.create_data["name"], versions[choice - 1])
-
-        elif self.current_state == AppState.CREATE_STEP_EDITION:
-            if choice == 1:
-                self.show_create_confirm(
-                    self.create_data["name"],
-                    self.create_data["version"],
-                    "Community"
-                )
-            elif choice == 2:
-                self.show_create_confirm(
-                    self.create_data["name"],
-                    self.create_data["version"],
-                    "Enterprise"
-                )
-
-        elif self.current_state == AppState.CREATE_STEP_CONFIRM:
-            if choice == 1:
-                self.do_create_instance()
-
-        elif self.current_state == AppState.INSTANCE_ACTIONS:
-            if choice == 1:
-                self.instance_action("start")
-            elif choice == 2:
-                self.instance_action("stop")
-            elif choice == 3:
-                self.instance_action("restart")
-            elif choice == 4:
-                self.show_placeholder("Logs")
-                self.show_instances()
-            elif choice == 5:
-                self.instance_action("remove")
-
-        elif self.current_state == AppState.PLACEHOLDER:
-            self.show_instances()
-
-    def handle_back(self) -> None:
-        """Handle back navigation."""
-        if self.current_state == AppState.INSTANCES:
-            self.show_main_menu()
-        elif self.current_state in [
-            AppState.CREATE_STEP_NAME,
-            AppState.CREATE_STEP_VERSION,
-            AppState.CREATE_STEP_EDITION,
-            AppState.CREATE_STEP_CONFIRM,
-            AppState.INSTANCE_ACTIONS,
-        ]:
-            self.show_instances()
-        else:
-            self.show_main_menu()
-
-    def get_instance_list(self) -> InstanceList:
-        """Get the current instance list widget."""
-        main = self.query_one("#main_container", Container)
-        if main.children and isinstance(main.children[0], InstanceList):
-            return main.children[0]
-        return None
-
-    def show_main_menu(self) -> None:
-        """Show main menu."""
-        self.current_state = AppState.MENU
-        self.create_data = {}
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(MainMenu())
-
-    def show_instances(self) -> None:
-        """Show instances list."""
-        self.current_state = AppState.INSTANCES
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(InstanceList())
-
-    def show_create_name(self) -> None:
-        """Show create instance step 1 - enter name."""
-        self.current_state = AppState.CREATE_STEP_NAME
-        self.create_data = {}
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(CreateNameStep())
-
-    def show_create_version(self, name: str) -> None:
-        """Show create instance step 2 - select version."""
-        self.current_state = AppState.CREATE_STEP_VERSION
-        self.create_data["name"] = name
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(CreateVersionStep(name))
-
-    def show_create_edition(self, name: str, version: str) -> None:
-        """Show create instance step 3 - select edition."""
-        self.current_state = AppState.CREATE_STEP_EDITION
-        self.create_data["name"] = name
-        self.create_data["version"] = version
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(CreateEditionStep(name, version))
-
-    def show_create_confirm(self, name: str, version: str, edition: str) -> None:
-        """Show create instance confirmation."""
-        self.current_state = AppState.CREATE_STEP_CONFIRM
-        self.create_data["name"] = name
-        self.create_data["version"] = version
-        self.create_data["edition"] = edition
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(CreateConfirmStep(name, version, edition))
-
-    def show_instance_actions(self, instance: dict) -> None:
+    def show_instance_actions(self, instance: dict):
         """Show actions for an instance."""
-        self.current_state = AppState.INSTANCE_ACTIONS
-        self.create_data["instance_name"] = instance["name"]
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(InstanceActions(instance))
+        while True:
+            console.clear()
 
-    def show_placeholder(self, title: str) -> None:
-        """Show a placeholder for unimplemented features."""
-        self.current_state = AppState.PLACEHOLDER
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(
-            Static(
-                f"""[bold cyan]{title}[/bold cyan]
+            status_color = "green" if instance["running"] else "red"
+            menu_text = f"[bold cyan]Instance: {instance['name']}[/bold cyan]\n\n"
+            menu_text += f"  Status:   [{status_color}]{instance['status'].upper()}[/{status_color}]\n"
+            menu_text += f"  Version:  {instance['version']}\n"
+            menu_text += f"  Port:     :{instance['port']}\n"
+            menu_text += "\n[bold]Actions[/bold]\n"
+            menu_text += "  [1]  Start          Start the instance\n"
+            menu_text += "  [2]  Stop           Stop the instance\n"
+            menu_text += "  [3]  Restart        Restart the instance\n"
+            menu_text += "  [4]  Logs           View logs\n"
+            menu_text += "  [5]  Remove         Delete instance\n"
+            menu_text += "\n  [0]  Back"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            console.print(Panel(menu_text, border_style="cyan"))
 
-[yellow]Coming soon...[/yellow]
+            choice = input(f"\nSelect action for {instance['name']}: ").strip()
 
-  [0] Back to main menu
+            if choice == "0":
+                return
+            elif choice == "1":
+                self.do_instance_action(instance["name"], "start")
+                if instance.get("running"):
+                    # Status changed, refresh
+                    return
+            elif choice == "2":
+                self.do_instance_action(instance["name"], "stop")
+                if not instance.get("running"):
+                    return
+            elif choice == "3":
+                self.do_instance_action(instance["name"], "restart")
+            elif choice == "4":
+                self.show_placeholder(f"Logs for {instance['name']}")
+            elif choice == "5":
+                if input(f"Remove '{instance['name']}'? (yes/no): ").strip().lower() == "yes":
+                    self.do_instance_action(instance["name"], "remove")
+                    return
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    def create_instance(self):
+        """Create a new instance - step by step."""
+        console.clear()
 
-Press 0 to go back"""
-            )
-        )
+        # Step 1: Name
+        console.print(Panel("[bold cyan]Create New Instance[/bold cyan]\n\n[bold]Step 1: Enter Instance Name[/bold]", border_style="cyan"))
+        name = input("\nEnter instance name: ").strip()
+        if not name:
+            console.print("[yellow]Cancelled[/yellow]")
+            input("\nPress Enter to continue...")
+            return
 
-    def do_create_instance(self) -> None:
-        """Actually create the instance."""
+        # Step 2: Version
+        console.clear()
+        console.print(Panel(
+            f"[bold cyan]Create New Instance[/bold cyan]\n\n[bold]Step 2: Select Version for '{name}'[/bold]\n\n"
+            "  [1]  19.0          (Latest stable)\n"
+            "  [2]  18.0          (Previous stable)\n"
+            "  [3]  17.0          (Previous stable)\n"
+            "  [4]  master        (Development)\n"
+            "\n  [0]  Cancel",
+            border_style="cyan"
+        ))
+
+        version_choice = input("\nSelect version (1-4): ").strip()
+        versions = {"1": "19.0", "2": "18.0", "3": "17.0", "4": "master"}
+        version = versions.get(version_choice)
+        if not version:
+            console.print("[yellow]Cancelled[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+
+        # Step 3: Edition
+        console.clear()
+        console.print(Panel(
+            f"[bold cyan]Create New Instance[/bold cyan]\n\n[bold]Step 3: Select Edition for '{name}'[/bold]\n\n"
+            "  [1]  Community      (Free, open source)\n"
+            "  [2]  Enterprise     (Paid, with extra features)\n"
+            "\n  [0]  Cancel",
+            border_style="cyan"
+        ))
+
+        edition_choice = input("\nSelect edition (1-2): ").strip()
+        editions = {"1": "community", "2": "enterprise"}
+        edition = editions.get(edition_choice)
+        if not edition:
+            console.print("[yellow]Cancelled[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+
+        # Step 4: Confirm
+        console.clear()
+        console.print(Panel(
+            f"[bold cyan]Create New Instance[/bold cyan]\n\n[bold]Step 4: Confirm[/bold]\n\n"
+            f"  Name:     [cyan]{name}[/cyan]\n"
+            f"  Version:  [cyan]{version}[/cyan]\n"
+            f"  Edition:  [cyan]{edition.title()}[/cyan]\n"
+            f"  Port:     [cyan]8069[/cyan] (default)\n"
+            f"  Workers:  [cyan]4[/cyan] (default)\n"
+            "\n  [1]  Create Instance"
+            "\n  [0]  Cancel",
+            border_style="cyan"
+        ))
+
+        confirm = input("\nConfirm? (1=Create, 0=Cancel): ").strip()
+        if confirm != "1":
+            console.print("[yellow]Cancelled[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+
+        # Create the instance
+        console.print("\n[dim]Creating instance...[/dim]")
         try:
             manager = InstanceManager()
             manager.create_instance(
-                name=self.create_data["name"],
-                version=self.create_data["version"],
-                edition=self.create_data["edition"].lower(),
+                name=name,
+                version=version,
+                edition=edition,
                 port=8069,
                 workers=4,
                 deployment_type="docker",
             )
-            self.show_message(
-                "Success",
-                f"Instance '[cyan]{self.create_data['name']}[/cyan]' created successfully!",
-                go_to_instances=True
-            )
+            console.print(f"[green]Instance '{name}' created successfully![/green]")
+            input("\nPress Enter to continue...")
         except Exception as e:
-            self.show_message("Error", f"[red]Failed to create instance:[/red]\n\n{e}")
+            console.print(f"[red]Failed to create instance: {e}[/red]")
+            input("\nPress Enter to continue...")
 
-    def instance_action(self, action: str) -> None:
-        """Perform an instance action."""
-        name = self.create_data.get("instance_name")
+    def do_instance_action(self, name: str, action: str):
+        """Perform an action on an instance."""
+        console.print(f"\n[dim]Performing: {action} on '{name}'...[/dim]")
         try:
             manager = InstanceManager()
             instance = manager.get_instance(name)
 
             if action == "start":
                 instance.start()
-                self.notify(f"Started '{name}'")
+                console.print(f"[green]Started '{name}'[/green]")
             elif action == "stop":
                 instance.stop()
-                self.notify(f"Stopped '{name}'")
+                console.print(f"[yellow]Stopped '{name}'[/yellow]")
             elif action == "restart":
                 instance.restart()
-                self.notify(f"Restarted '{name}'")
+                console.print(f"[yellow]Restarted '{name}'[/yellow]")
             elif action == "remove":
                 instance.remove()
                 manager.remove_instance(name)
-                self.notify(f"Removed '{name}'")
+                console.print(f"[red]Removed '{name}'[/red]")
 
-            self.show_instances()
-
+            input("\nPress Enter to continue...")
         except Exception as e:
-            self.show_message("Error", f"[red]Action failed:[/red]\n\n{e}")
+            console.print(f"[red]Action failed: {e}[/red]")
+            input("\nPress Enter to continue...")
 
-    def show_message(self, title: str, message: str, go_to_instances: bool = False) -> None:
-        """Show a simple message."""
-        main = self.query_one("#main_container", Container)
-        main.remove_children()
-        main.mount(
-            Static(
-                f"""[bold cyan]{title}[/bold cyan]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{message}
-
-  [0] OK
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Press 0 to continue"""
-            )
-        )
-        if go_to_instances:
-            # Auto-advance to instances after user presses 0
-            self._go_to_instances_after_message = True
-
-    def on_key(self, event) -> None:
-        """Override to handle special case."""
-        # Check for auto-advance after message
-        if hasattr(self, '_go_to_instances_after_message') and event.key == '0':
-            delattr(self, '_go_to_instances_after_message')
-            self.show_instances()
-            return
-
-        # Original handler
-        if event.key == "q" or event.key == "Q":
-            self.exit()
-            return
-
-        if event.character and event.character.isdigit():
-            self.handle_number_input(int(event.character))
-            return
-
-        if event.key == "c" or event.key == "C":
-            if self.current_state == AppState.INSTANCES:
-                self.show_create_name()
-            return
-
-        if event.key == "0":
-            self.handle_back()
-
-
-# Add PLACEHOLDER to AppState
-AppState.PLACEHOLDER = "placeholder"
+    def show_placeholder(self, title: str):
+        """Show a placeholder for unimplemented features."""
+        console.clear()
+        console.print(Panel(
+            f"[bold cyan]{title}[/bold cyan]\n\n[yellow]Coming soon...[/yellow]",
+            border_style="cyan"
+        ))
+        input("\nPress Enter to continue...")
 
 
 def launch_tui():
-    """Launch the TUI application."""
-    app = OdooManagerTUI()
+    """Launch the simple TUI."""
+    app = SimpleTUI()
     app.run()
