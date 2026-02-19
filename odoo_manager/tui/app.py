@@ -23,7 +23,6 @@ from textual.widgets import (
     ProgressBar,
     ListItem,
     ListView,
-    Placeholder,
     Log,
     Switch,
 )
@@ -116,7 +115,8 @@ class InstanceList(Container):
         self.remove_children()
 
         if not self.instances:
-            self.mount(Placeholder(name="no_instances", text="No instances found"))
+            # Use Static instead of Placeholder for compatibility
+            self.mount(Static("No instances found", id="no_instances"))
             return
 
         # Create table
