@@ -22,6 +22,46 @@ fi
 PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
 echo "Found Python: $PYTHON_CMD $PYTHON_VERSION"
 
+# Ensure pip is installed
+echo ""
+echo "Checking for pip..."
+if ! $PYTHON_CMD -m pip --version &> /dev/null; then
+    echo "pip not found. Installing pip..."
+
+    # Detect OS and install pip
+    if [ -f /etc/debian_version ]; then
+        # Debian/Ubuntu
+        echo "Detected Debian/Ubuntu system"
+        sudo apt-get update > /dev/null 2>&1
+        sudo apt-get install -y python3-pip python3-venv > /dev/null 2>&1
+    elif [ -f /etc/redhat-release ]; then
+        # RHEL/CentOS/Fedora
+        echo "Detected RedHat/CentOS/Fedora system"
+        sudo dnf install -y python3-pip python3-devel 2>/dev/null || \
+        sudo yum install -y python3-pip python3-devel
+    elif command -v pacman &> /dev/null; then
+        # Arch Linux
+        echo "Detected Arch Linux system"
+        sudo pacman -S --noconfirm python-pip
+    else
+        echo "Warning: Could not auto-install pip."
+        echo "Please install pip manually:"
+        echo "  Ubuntu/Debian: sudo apt install python3-pip"
+        echo "  CentOS/RHEL: sudo dnf install python3-pip"
+        echo "  Or use: curl https://bootstrap.pypa.io/get-pip.py | python3"
+        exit 1
+    fi
+
+    # Verify pip was installed
+    if ! $PYTHON_CMD -m pip --version &> /dev/null; then
+        echo "Error: Failed to install pip. Please install it manually."
+        exit 1
+    fi
+    echo "✓ pip installed"
+else
+    echo "✓ pip is available"
+fi
+
 # Create install directory
 echo ""
 echo "Setting up directories..."
