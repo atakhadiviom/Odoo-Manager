@@ -153,18 +153,39 @@ echo "✓ Created command: $USER_BIN/om"
 # Try to create symlinks in /usr/local/bin (system-wide, always in PATH)
 echo ""
 echo "Creating system-wide commands..."
+SYMLINK_CREATED=false
+
 if [ -w /usr/local/bin ]; then
     ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
     ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
-    echo "✓ Created system-wide symlinks in /usr/local/bin"
-else
+    if [ -L /usr/local/bin/odoo-manager ]; then
+        echo "✓ Created system-wide symlinks in /usr/local/bin"
+        SYMLINK_CREATED=true
+    fi
+fi
+
+if [ "$SYMLINK_CREATED" = false ]; then
     # Use sudo if available
     if command -v sudo &> /dev/null; then
         sudo ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
         sudo ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
-        echo "✓ Created system-wide symlinks in /usr/local/bin"
-    else
-        echo "⚠️  Could not create system-wide symlinks (no write access to /usr/local/bin)"
+        if [ -L /usr/local/bin/odoo-manager ]; then
+            echo "✓ Created system-wide symlinks in /usr/local/bin (with sudo)"
+            SYMLINK_CREATED=true
+        fi
+    fi
+fi
+
+if [ "$SYMLINK_CREATED" = false ]; then
+    echo "⚠️  Could not create system-wide symlinks"
+    echo "   Adding ~/.local/bin to .bashrc instead..."
+    if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
+        echo "" >> ~/.bashrc
+        echo "# Odoo Manager" >> ~/.bashrc
+        echo "export PATH=\"\$PATH:$USER_BIN\"" >> ~/.bashrc
+        echo "✓ Added to PATH in ~/.bashrc"
+        echo ""
+        echo "   Run: source ~/.bashrc"
     fi
 fi
 
