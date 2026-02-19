@@ -18,6 +18,12 @@ from odoo_manager.utils.postgres import (
     duplicate_database,
     check_connection,
 )
+from odoo_manager.utils.docker import (
+    is_docker_installed,
+    is_docker_running,
+    install_docker,
+    ensure_docker,
+)
 
 __all__ = [
     "success",
@@ -34,4 +40,8 @@ __all__ = [
     "drop_database",
     "duplicate_database",
     "check_connection",
+    "is_docker_installed",
+    "is_docker_running",
+    "install_docker",
+    "ensure_docker",
 ]

@@ -2,6 +2,7 @@
 Docker deployment strategy using docker-compose.
 """
 
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -88,8 +89,40 @@ class DockerDeployer(BaseDeployer):
         self.ensure_data_dir()
         self._generate_compose_file()
 
+    def _ensure_docker(self) -> None:
+        """Ensure Docker is installed and running."""
+        import os
+
+        # Check if Docker is installed
+        if not shutil.which("docker"):
+            raise OdooDockerError(
+                "Docker is not installed. Please install it first or use the TUI "
+                "which will install Docker automatically."
+            )
+
+        # Check if Docker daemon is running
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                # Try to start Docker
+                subprocess.run(
+                    ["sudo", "systemctl", "start", "docker"],
+                    check=True,
+                    capture_output=True
+                )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+            raise OdooDockerError(
+                f"Docker is not running. Please start Docker with: sudo systemctl start docker"
+            )
+
     def start(self) -> None:
         """Start the instance using docker-compose."""
+        self._ensure_docker()
+
         if not self.compose_file.exists():
             self.create()
 
@@ -112,6 +145,8 @@ class DockerDeployer(BaseDeployer):
 
     def restart(self) -> None:
         """Restart the instance using docker-compose."""
+        self._ensure_docker()
+
         if not self.compose_file.exists():
             return
 

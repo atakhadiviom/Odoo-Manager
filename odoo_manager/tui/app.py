@@ -17,6 +17,7 @@ from odoo_manager.core.database import DatabaseManager
 from odoo_manager.core.module import ModuleManager
 from odoo_manager.core.backup import BackupManager
 from odoo_manager.core.monitor import HealthMonitor
+from odoo_manager.utils.docker import ensure_docker, is_docker_installed, is_docker_running
 
 
 console = Console()
@@ -660,6 +661,35 @@ A complete Odoo instance management tool
             input("\nPress Enter to continue...")
             return
 
+        # Check and install Docker if needed
+        if deployment == "docker" and not is_docker_installed():
+            console.print("\n[yellow]Docker is not installed. Installing Docker now...[/yellow]")
+            console.print("[dim]This may take a few minutes...[/dim]\n")
+
+            success, message = ensure_docker(verbose=True)
+
+            if success:
+                console.print(f"[green]{message}[/green]")
+                # Wait a moment for Docker to be ready
+                import time
+                time.sleep(2)
+            else:
+                console.print(f"[red]Failed to install Docker: {message}[/red]")
+                console.print("\n[yellow]Please install Docker manually and try again.[/yellow]")
+                input("\nPress Enter to continue...")
+                return
+        elif deployment == "docker" and not is_docker_running():
+            console.print("\n[yellow]Docker is installed but not running. Starting Docker...[/yellow]")
+            try:
+                subprocess.run(["sudo", "systemctl", "start", "docker"], check=True, capture_output=True)
+                console.print("[green]Docker started successfully![/green]")
+                import time
+                time.sleep(1)
+            except Exception as e:
+                console.print(f"[red]Failed to start Docker: {e}[/red]")
+                input("\nPress Enter to continue...")
+                return
+
         # Create the instance
         console.print("\n[dim]Creating instance...[/dim]")
         try:
@@ -1040,6 +1070,33 @@ A complete Odoo instance management tool
         try:
             manager = InstanceManager()
             instance = manager.get_instance(name)
+
+            # Check Docker for start/restart actions
+            if action in ("start", "restart"):
+                if instance.config.deployment_type == "docker":
+                    if not is_docker_installed():
+                        console.print("[yellow]Docker is not installed. Installing now...[/yellow]")
+                        success, message = ensure_docker(verbose=True)
+                        if success:
+                            console.print(f"[green]{message}[/green]")
+                            import time
+                            time.sleep(2)
+                        else:
+                            console.print(f"[red]Failed to install Docker: {message}[/red]")
+                            input("\nPress Enter to continue...")
+                            return
+                    elif not is_docker_running():
+                        console.print("[yellow]Starting Docker daemon...[/yellow]")
+                        try:
+                            subprocess.run(["sudo", "systemctl", "start", "docker"],
+                                         check=True, capture_output=True)
+                            console.print("[green]Docker started![/green]")
+                            import time
+                            time.sleep(1)
+                        except Exception as e:
+                            console.print(f"[red]Failed to start Docker: {e}[/red]")
+                            input("\nPress Enter to continue...")
+                            return
 
             if action == "start":
                 instance.start()
