@@ -2,6 +2,7 @@
 Docker deployment strategy using docker-compose.
 """
 
+import os
 import shutil
 import subprocess
 import time
@@ -26,6 +27,60 @@ from odoo_manager.constants import (
 )
 from odoo_manager.deployers.base import BaseDeployer
 from odoo_manager.exceptions import DockerError as OdooDockerError
+
+
+def _can_access_docker() -> bool:
+    """Check if we can access docker without sudo."""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _get_docker_command() -> list[str]:
+    """Get docker command with sudo if needed."""
+    if _can_access_docker():
+        return ["docker"]
+    return ["sudo", "docker"]
+
+
+def get_docker_compose_command() -> list[str]:
+    """Get the appropriate docker-compose command."""
+    docker_cmd = _get_docker_command()
+
+    # Try docker compose (plugin version)
+    try:
+        result = subprocess.run(
+            docker_cmd + ["compose", "version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return docker_cmd + ["compose"]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Try standalone docker-compose
+    try:
+        result = subprocess.run(
+            ["docker-compose", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return ["docker-compose"]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Default to docker compose (plugin version) with sudo if needed
+    return docker_cmd + ["compose"]
 
 
 def get_docker_compose_command() -> list[str]:
@@ -91,8 +146,6 @@ class DockerDeployer(BaseDeployer):
 
     def _ensure_docker(self) -> None:
         """Ensure Docker is installed and running."""
-        import os
-
         # Check if Docker is installed
         if not shutil.which("docker"):
             raise OdooDockerError(
@@ -100,10 +153,10 @@ class DockerDeployer(BaseDeployer):
                 "which will install Docker automatically."
             )
 
-        # Check if Docker daemon is running
+        # Check if Docker daemon is running (use sudo to bypass permission issues)
         try:
             result = subprocess.run(
-                ["docker", "info"],
+                ["sudo", "docker", "info"],
                 capture_output=True,
                 timeout=5
             )
@@ -125,6 +178,9 @@ class DockerDeployer(BaseDeployer):
 
         if not self.compose_file.exists():
             self.create()
+
+        # Refresh compose command in case Docker was just installed
+        self.compose_cmd = get_docker_compose_command()
 
         cmd = self.compose_cmd + ["-f", str(self.compose_file), "up", "-d"]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -193,7 +249,8 @@ class DockerDeployer(BaseDeployer):
     def exec_command(self, command: list[str], capture: bool = False) -> str | int:
         """Execute a command in the Odoo container."""
         container_name = self._container_names["odoo"]
-        cmd = ["docker", "exec"]
+        docker_cmd = _get_docker_command()
+        cmd = docker_cmd + ["exec"]
 
         if not capture:
             cmd += ["-it"]
@@ -270,9 +327,7 @@ class DockerDeployer(BaseDeployer):
 
     def _get_default_compose_template(self) -> str:
         """Get the default docker-compose template."""
-        return '''version: '3.8'
-
-services:
+        return '''services:
   odoo:
     image: {{ odoo_image }}
     container_name: {{ container_names.odoo }}
