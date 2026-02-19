@@ -196,6 +196,6 @@ echo "Installation Complete!"
 echo "=========================================="
 echo ""
 
-# Launch odoo-manager interactive menu
-echo "Launching Odoo Manager..."
-$ODOO_CMD
+# Launch odoo-manager TUI directly
+echo "Launching Odoo Manager Terminal UI..."
+$ODOO_CMD ui
