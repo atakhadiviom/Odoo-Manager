@@ -65,6 +65,7 @@ class InstanceList(Container):
     """Instance list with numbered options."""
 
     instances: list = []
+    content: Static = None
 
     def on_mount(self) -> None:
         """Load instances when mounted."""
@@ -94,12 +95,12 @@ class InstanceList(Container):
 
     def update_display(self) -> None:
         """Update the display."""
-        content = Static(id="instance_list")
-        self.remove_children()
-        self.mount(content)
+        if self.content is None:
+            self.content = Static()
+            self.mount(self.content)
 
         if not self.instances:
-            content.update("[yellow]No instances found.[/yellow]\n\n[0] Return to menu")
+            self.content.update("[yellow]No instances found.[/yellow]\n\n[0] Return to menu\n\nPress [1] to create a new instance")
             return
 
         text = "[bold]Odoo Instances[/bold]\n\n"
@@ -108,29 +109,33 @@ class InstanceList(Container):
             text += f"  [{i}] {inst['name']:20} {status:15} v{inst['version']} :{inst['port']}\n"
 
         text += "\n[0] Return to menu"
-        content.update(Text.from_markup(text))
-
-    def compose(self) -> ComposeResult:
-        """Compose the instance list."""
-        yield Static(id="instance_list")
+        self.content.update(Text.from_markup(text))
 
 
 class CreateInstanceForm(Container):
     """Form to create a new instance."""
 
+    header: Static = None
+    input_field: Input = None
+
     def compose(self) -> ComposeResult:
         """Compose the form."""
-        yield Static(
+        self.header = Static(
             """[bold cyan]Create New Instance[/bold cyan]
 
 Step 1: Enter Instance Name
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-[0] Cancel""",
-            id="create_header"
+[0] Cancel"""
         )
-        yield Input(placeholder="Enter instance name...", id="input_name")
+        yield self.header
+        self.input_field = Input(placeholder="Enter instance name...")
+        yield self.input_field
+
+    def on_mount(self) -> None:
+        """Focus input on mount."""
+        self.input_field.focus()
 
 
 class CreateInstanceStep2(Container):
@@ -375,10 +380,8 @@ class OdooManagerTUI(App):
         self.create_data = {}
         main = self.query_one("#main_container", Container)
         main.remove_children()
-        main.mount(CreateInstanceForm())
-        # Focus on input
-        input_widget = self.query_one(Input)
-        input_widget.focus()
+        form = CreateInstanceForm()
+        main.mount(form)
 
     def show_create_step2(self, name: str) -> None:
         """Show create instance step 2 - select version."""
