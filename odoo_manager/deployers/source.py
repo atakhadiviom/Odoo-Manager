@@ -285,7 +285,7 @@ class SourceDeployer(BaseDeployer):
     def _generate_config(self) -> None:
         """Generate odoo.conf file."""
         env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(__file__).parent.parent / "templates"
+            loader=jinja2.FileSystemLoader(Path(__file__).parent.parent / "templates")
         )
 
         try:
@@ -324,7 +324,7 @@ class SourceDeployer(BaseDeployer):
     def _generate_service(self) -> None:
         """Generate systemd service file."""
         env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(__file__).parent.parent / "templates"
+            loader=jinja2.FileSystemLoader(Path(__file__).parent.parent / "templates")
         )
 
         try:

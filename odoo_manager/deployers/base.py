@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from odoo_manager.config import InstanceConfig
-from odoo_manager.constants import STATE_RUNNING, STATE_STOPPED
+from odoo_manager.constants import STATE_RUNNING, STATE_STOPPED, STATE_UNKNOWN
 
 
 class BaseDeployer(ABC):

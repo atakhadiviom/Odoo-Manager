@@ -202,7 +202,8 @@ class DockerDeployer(BaseDeployer):
 
     def _generate_compose_file(self) -> None:
         """Generate the docker-compose.yml file."""
-        env = jinja2.Environment(loader=jinja2.FileSystemLoader(__file__).parent.parent / "templates")
+        from pathlib import Path
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent.parent / "templates"))
 
         try:
             template = env.get_template("docker-compose.yml.j2")
