@@ -355,26 +355,26 @@ class DockerDeployer(BaseDeployer):
     ports:
       - "{{ instance.port }}:8069"
     environment:
+      # Odoo configuration via environment variables
       HOST: {{ db_host }}
       PORT: {{ db_port }}
       USER: {{ postgres_user }}
       PASSWORD: {{ postgres_password }}
+      # Additional Odoo settings
+      ODOO_DB_HOST: {{ db_host }}
+      ODOO_DB_PORT: {{ db_port }}
+      ODOO_DB_USER: {{ postgres_user }}
+      ODOO_DB_PASSWORD: {{ postgres_password }}
+      ODOO_DB_FILTER: {{ instance.db_filter }}
+      ODOO_WORKERS: {{ instance.workers }}
+      ODOO_MAX_CRON_THREADS: {{ instance.max_cron_threads }}
+      ODOO_DB_MAXCONN: {{ instance.db_maxconn }}
+      ODOO_ADMIN_PASSWORD: {{ instance.admin_password }}
+      ODOO_WITHOUT_DEMO: {{ instance.without_demo | lower }}
     volumes:
       - odoo-data:/var/lib/odoo
       - ./addons:/mnt/extra-addons
     restart: unless-stopped
-    command: --
-      --db-host={{ db_host }}
-      --db-port={{ db_port }}
-      --db-user={{ postgres_user }}
-      --db-password={{ postgres_password }}
-      --db-filter={{ instance.db_filter }}
-      --workers={{ instance.workers }}
-      --max-cron-threads={{ instance.max_cron_threads }}
-      --db-maxconn={{ instance.db_maxconn }}
-      --admin-password={{ instance.admin_password }}
-      {% if instance.addons_path %}--addons-path={{ instance.addons_path }}{% endif %}
-      --without-demo={{ instance.without_demo | lower }}
 
   postgres:
     image: {{ postgres_image }}
