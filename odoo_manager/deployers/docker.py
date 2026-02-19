@@ -210,15 +210,25 @@ class DockerDeployer(BaseDeployer):
 
     def status(self) -> str:
         """Get the current status of the instance."""
+        docker_cmd = _get_docker_command()
+        container_name = self._container_names["odoo"]
+
         try:
-            container = self._get_container("odoo")
-            if container is None:
+            result = subprocess.run(
+                docker_cmd + ["ps", "-a", "--filter", f"name={container_name}", "--format", "{{.Status}}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            status_output = result.stdout.strip()
+
+            if not status_output:
                 return STATE_STOPPED
 
-            status = container.status.lower()
-            if "running" in status:
+            status_lower = status_output.lower()
+            if "running" in status_lower or "up" in status_lower:
                 return STATE_RUNNING
-            elif "exited" in status:
+            elif "exited" in status_lower or "dead" in status_lower:
                 return STATE_STOPPED
             else:
                 return STATE_UNKNOWN
@@ -227,7 +237,20 @@ class DockerDeployer(BaseDeployer):
 
     def is_running(self) -> bool:
         """Check if the instance is running."""
-        return self.status() == STATE_RUNNING
+        docker_cmd = _get_docker_command()
+        container_name = self._container_names["odoo"]
+
+        try:
+            result = subprocess.run(
+                docker_cmd + ["ps", "--filter", f"name={container_name}", "--format", "{{.Status}}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            status_output = result.stdout.strip().lower()
+            return "running" in status_output or "up" in status_output
+        except Exception:
+            return False
 
     def remove(self) -> None:
         """Remove the instance deployment."""
