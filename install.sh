@@ -150,22 +150,32 @@ chmod +x "$USER_BIN/om"
 echo "✓ Created command: $USER_BIN/odoo-manager"
 echo "✓ Created command: $USER_BIN/om"
 
-# Automatically add to PATH if not already there
+# Try to create symlinks in /usr/local/bin (system-wide, always in PATH)
 echo ""
+echo "Creating system-wide commands..."
+if [ -w /usr/local/bin ]; then
+    ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
+    ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
+    echo "✓ Created system-wide symlinks in /usr/local/bin"
+else
+    # Use sudo if available
+    if command -v sudo &> /dev/null; then
+        sudo ln -sf "$USER_BIN/odoo-manager" /usr/local/bin/odoo-manager 2>/dev/null
+        sudo ln -sf "$USER_BIN/om" /usr/local/bin/om 2>/dev/null
+        echo "✓ Created system-wide symlinks in /usr/local/bin"
+    else
+        echo "⚠️  Could not create system-wide symlinks (no write access to /usr/local/bin)"
+    fi
+fi
+
+# Also add to .bashrc for shell sessions
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
-    # Add to .bashrc for future sessions
     if ! grep -q "$USER_BIN" ~/.bashrc 2>/dev/null; then
         echo "" >> ~/.bashrc
         echo "# Odoo Manager" >> ~/.bashrc
         echo "export PATH=\"\$PATH:$USER_BIN\"" >> ~/.bashrc
         echo "✓ Added $USER_BIN to PATH in ~/.bashrc"
     fi
-
-    # Add to current session
-    export PATH="$PATH:$USER_BIN"
-    echo "✓ Added $USER_BIN to current session"
-else
-    echo "✓ $USER_BIN is already in PATH"
 fi
 
 echo ""
@@ -173,8 +183,11 @@ echo "=========================================="
 echo "Installation Complete!"
 echo "=========================================="
 echo ""
-echo "Try running:"
-echo "  odoo-manager --help"
+
+# Test the command immediately
+echo "Testing odoo-manager..."
+"$USER_BIN/odoo-manager" --help
+
 echo ""
 echo "Quick start:"
 echo "  odoo-manager config init"
