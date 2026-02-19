@@ -66,16 +66,22 @@ class DockerDeployer(BaseDeployer):
         super().__init__(instance, data_dir)
         self.compose_cmd = get_docker_compose_command()
         self.compose_file = self.data_dir / self.COMPOSE_FILE
-
-        try:
-            self.docker_client = from_env()
-        except DockerError as e:
-            raise OdooDockerError(f"Cannot connect to Docker daemon: {e}")
+        self._docker_client = None  # Lazy initialization
 
         self._container_names = {
             "odoo": f"odoo-{self.instance.name}",
             "postgres": f"odoo-{self.instance.name}-db",
         }
+
+    @property
+    def docker_client):
+        """Lazy load Docker client."""
+        if self._docker_client is None:
+            try:
+                self._docker_client = from_env()
+            except DockerError as e:
+                raise OdooDockerError(f"Cannot connect to Docker daemon: {e}")
+        return self._docker_client
 
     def create(self) -> None:
         """Create the instance deployment."""
@@ -186,7 +192,11 @@ class DockerDeployer(BaseDeployer):
     def _get_container(self, service: str) -> Container | None:
         """Get a Docker container by service name."""
         try:
-            return self.docker_client.containers.get(self._container_names[service])
+            client = self.docker_client
+            return client.containers.get(self._container_names[service])
+        except (DockerError, OdooDockerError):
+            # Docker not available or not running
+            return None
         except Exception:
             return None
 
