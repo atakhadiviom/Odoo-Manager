@@ -570,7 +570,9 @@ class OdooManagerTUI(App):
         """Show dashboard view."""
         main_content = self.query_one("#main_content", Container)
         main_content.remove_children()
-        main_content.mount(Dashboard(id="dashboard"))
+        # Don't set an ID to avoid duplicates
+        dashboard = Dashboard()
+        main_content.mount(dashboard)
         self.current_state = AppState.DASHBOARD
         self._update_nav_highlight("nav_dashboard")
 
@@ -579,7 +581,8 @@ class OdooManagerTUI(App):
         """Show instances view."""
         main_content = self.query_one("#main_content", Container)
         main_content.remove_children()
-        main_content.mount(InstanceTable(id="instances"))
+        instance_table = InstanceTable()
+        main_content.mount(instance_table)
         self.current_state = AppState.INSTANCES
         self._update_nav_highlight("nav_instances")
 
