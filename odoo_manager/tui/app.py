@@ -193,11 +193,11 @@ class StatusPanel(Container):
         )
         yield Horizontal(
             Static("Running:"),
-            Label("0", id="running_instances", style="green"),
+            Label("0", id="running_instances", classes="green"),
         )
         yield Horizontal(
             Static("Stopped:"),
-            Label("0", id="stopped_instances", style="red"),
+            Label("0", id="stopped_instances", classes="red"),
         )
         yield Horizontal(
             Static("Databases:"),
@@ -241,13 +241,17 @@ class StatusPanel(Container):
             cpu = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory().percent
 
-            self.query_one("#system_cpu").update(f"{cpu:.1f}%")
-            cpu_style = "green" if cpu < 70 else "red" if cpu > 90 else "yellow"
-            self.query_one("#system_cpu").style = cpu_style
+            cpu_label = self.query_one("#system_cpu", Label)
+            cpu_label.update(f"{cpu:.1f}%")
+            cpu_label.set_class(not (cpu < 70), "green")
+            cpu_label.set_class(cpu > 90, "red")
+            cpu_label.set_class(70 <= cpu <= 90, "yellow")
 
-            self.query_one("#system_memory").update(f"{memory:.1f}%")
-            mem_style = "green" if memory < 70 else "red" if memory > 90 else "yellow"
-            self.query_one("#system_memory").style = mem_style
+            mem_label = self.query_one("#system_memory", Label)
+            mem_label.update(f"{memory:.1f}%")
+            mem_label.set_class(not (memory < 70), "green")
+            mem_label.set_class(memory > 90, "red")
+            mem_label.set_class(70 <= memory <= 90, "yellow")
 
         except Exception:
             pass
@@ -388,6 +392,18 @@ class OdooManagerTUI(App):
 
     DataTable {
         height: 1fr;
+    }
+
+    .green {
+        color: green;
+    }
+
+    .red {
+        color: red;
+    }
+
+    .yellow {
+        color: yellow;
     }
     """
 
